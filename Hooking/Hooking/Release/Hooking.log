@@ -1,0 +1,9 @@
+﻿  Hooking.cpp
+C:\Users\Mikasa\Documents\tools\Shinigami\Hooking\Hooking\Hooking.cpp(40,24): warning C4244: '=': conversion from 'ULONG_PTR' to 'BYTE', possible loss of data
+C:\Users\Mikasa\Documents\tools\Shinigami\Hooking\Hooking\Hooking.cpp(61,11): warning C4101: 'dwOld': unreferenced local variable
+  Generating code
+  2 of 13 functions (15.4%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Hooking.vcxproj -> C:\Users\Mikasa\Documents\tools\Shinigami\Hooking\Release\Hooking.exe
