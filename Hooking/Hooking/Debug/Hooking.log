@@ -1,3 +1,0 @@
-﻿  Hooking.cpp
-C:\Users\Mikasa\Documents\tools\Shinigami\Hooking\Hooking\Hooking.cpp(46,11): warning C4101: 'dwOld': unreferenced local variable
-  Hooking.vcxproj -> C:\Users\Mikasa\Documents\tools\Shinigami\Hooking\Debug\Hooking.exe
