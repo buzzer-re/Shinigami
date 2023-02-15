@@ -34,10 +34,14 @@ bool Injector::InjectSuspended(const std::wstring& dllPath)
 
     // Inject DLL using APC
     status = APCLoadDLL(pi, dllPath);
-    if (!status) goto quit;
+
+    if (!status)
+    {
+        TerminateProcess(pi.hProcess, EXIT_FAILURE);
+        goto quit;
+    }
+
     ResumeThread(pi.hThread);
-
-
 quit:
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);

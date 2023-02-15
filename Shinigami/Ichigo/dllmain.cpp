@@ -24,8 +24,6 @@ LPVOID WINAPI hkVirtualAlloc(
     DWORD  flProtect
 )
 {
-    std::cout << "Called hooked VirtualAlloc\n";
-
     LPVOID alloc = oVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
     std::printf("Allocated memory at 0x%lx\n", (ULONG_PTR) alloc);
     return alloc;
@@ -41,7 +39,7 @@ VOID InitHooks()
     // Hook ResumeThread
     // Hook GetThreadContext
 
-    oVirtualAlloc = (pVirtualAlloc)manager.AddHook((BYTE*)VirtualAlloc, (BYTE*)hkVirtualAlloc, (BYTE*)NULL);
+    oVirtualAlloc = (pVirtualAlloc)manager.AddHook((BYTE*)VirtualAlloc, (BYTE*)hkVirtualAlloc);
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,

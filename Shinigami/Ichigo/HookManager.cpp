@@ -2,41 +2,114 @@
 #include "HookManager.h"
 #include <iostream>
 
-ULONG_PTR* __stdcall HookManager::AddHook(BYTE* Src, BYTE* Dst, BYTE* OriginalAddr)
+LPVOID
+HookManager::AddHook(
+    _In_ BYTE* Src,
+    _In_ BYTE* Dst
+)
 {
-    // TODO: Verify if is a valid executable area
-    // 
-    // Verify if it's a hook already exists
-
-
-    DWORD curProtection;
-    ULONG_PTR gatewayDelta;
-    ULONG_PTR relativeAddrHook;
-
     auto it = hooks.find(Src);
     if (it != hooks.end()) return nullptr;
+    LPVOID pGatewayAddr;
 
-    // Allocate the gateway code that will run the override bytes by the trampoline
-    BYTE* gateway = reinterpret_cast<BYTE*>(VirtualAlloc(NULL, HOOK_MAX_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
-    if (gateway == nullptr) return nullptr;
+#ifndef _WIN32
+    pGatewayAddr = Hook32(Src, Dst);
+#else
+    pGatewayAddr = Hook64(Src, Dst);
+#endif
 
-    memcpy_s(gateway, TRAMPOLINE_SIZE, Src, TRAMPOLINE_SIZE);
+    // 
+    // Insert new hook on the manager map
+    //
+    Hook hk;
+    hk.OriginalAddr = Src;
+    hk.HookAddr = Dst;
+    hk.GatewayAddr = pGatewayAddr;
 
-    // Calculate the delta to jump back
-    gatewayDelta = Src - gateway - TRAMPOLINE_SIZE;
-    relativeAddrHook = Dst - Src - TRAMPOLINE_SIZE;
+    hooks[Src] = hk;
 
-    *(BYTE*) (gateway + TRAMPOLINE_SIZE) = 0xE9;
-    *(ULONG_PTR*)((ULONG_PTR)gateway + TRAMPOLINE_SIZE + 1) = gatewayDelta;
-    // Write the trampoline
+    return pGatewayAddr;
+}
 
-    VirtualProtect(Src, TRAMPOLINE_SIZE, PAGE_EXECUTE_READWRITE, &curProtection);
+LPVOID 
+HookManager::Hook64(
+    _In_ BYTE* Src, 
+    _In_ BYTE* Dst
+)
+{
+    // mov rax, <addr>
+    // jmp rax
+
+    return nullptr;
+}
+
+LPVOID 
+HookManager::Hook32(
+    _In_ BYTE* Src, 
+    _In_ BYTE* Dst
+)
+{
+    DWORD dwOldCodeDelta;
+    DWORD dwOldProtection;
+    DWORD dwRelativeAddrDstDelta;
+
+    // 
+    // Allocate a memory to store the code overwritten and the jump back
+    //
+    BYTE* pOldCode = reinterpret_cast<BYTE*>(VirtualAlloc(NULL, 2 * X86_TRAMPOLINE_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
+    if (pOldCode == nullptr) return nullptr;
+    // 
+    // Copy the old code before overwrite
+    //
+    memcpy_s(pOldCode, X86_TRAMPOLINE_SIZE, Src, TRAMPOLINE_SIZE);
+
+    //
+    // Build code: jmp OldCodeDelta
+    //
+    dwOldCodeDelta = Src - pOldCode - TRAMPOLINE_SIZE;
     
-    *Src = 0xE9;
-    *(ULONG_PTR*)(Src + 1) = relativeAddrHook;
+    //
+    // Write relative jump
+    //
+    pOldCode[(uint8_t)X86_TRAMPOLINE_SIZE] = JUMP;
     
-    VirtualProtect(Src, TRAMPOLINE_SIZE, curProtection, &curProtection);
+    //
+    // Write destination, relative address to Dst 
+    //
+    *(DWORD_PTR*)(pOldCode + X86_TRAMPOLINE_SIZE + 1) = dwOldCodeDelta;
+    
+    //
+    // Change protections to for writing
+    //
+    if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, PAGE_READWRITE, &dwOldProtection))
+    {
+        std::printf("Error on replacing protection!\n");
+        VirtualFree(pOldCode, NULL, MEM_RELEASE);
+        return nullptr;
+    }
 
+    //
+    // Calculate relative address
+    //
+    dwRelativeAddrDstDelta = Dst - Src - X86_TRAMPOLINE_SIZE;
 
-    return (ULONG_PTR*) gateway;
+    //
+    // Write jump instruction
+    //
+    *Src = JUMP;
+    //
+    // Write destination
+    //
+    *(DWORD_PTR*)(Src + 1) = dwRelativeAddrDstDelta;
+    //
+    // Recover old protections
+    //
+    if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection))
+    {
+        std::printf("Error on replacing protection!\n");
+        VirtualFree(pOldCode, NULL, MEM_RELEASE);
+        return nullptr;
+    }
+
+    return (LPVOID) pOldCode;
 }
