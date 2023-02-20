@@ -2,7 +2,7 @@
 
 #include "pch.h"
 #include "HookManager.h"
-
+#include <intrin.h>
 
 #define DLL_NAME "Ichigo v0.1"
 
@@ -24,10 +24,13 @@ LPVOID WINAPI hkVirtualAlloc(
     DWORD  flProtect
 )
 {
+    std::printf("Called hooked code at 0x%llx!\n", reinterpret_cast<uintptr_t>(_ReturnAddress()));
     LPVOID alloc = oVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
-    std::printf("Allocated memory at 0x%lx\n", (ULONG_PTR) alloc);
+    // implement shadow mem
     return alloc;
 }
+
+
 
 
 VOID InitHooks()
@@ -39,7 +42,7 @@ VOID InitHooks()
     // Hook ResumeThread
     // Hook GetThreadContext
 
-    oVirtualAlloc = (pVirtualAlloc)manager.AddHook((BYTE*)VirtualAlloc, (BYTE*)hkVirtualAlloc);
+    oVirtualAlloc = (pVirtualAlloc)manager.AddHook((BYTE*) GetProcAddress(LoadLibraryA("kernelbase.dll"), "VirtualAlloc"), (BYTE*)hkVirtualAlloc);
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,
