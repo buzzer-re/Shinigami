@@ -4,7 +4,11 @@
 
 HookManager::HookManager()
 {
+#if defined(_WIN64)
     ZydisDecoderInit(&zDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+#else
+    ZydisDecoderInit(&zDecoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_ADDRESS_WIDTH_32);
+#endif
 }
 
 LPVOID
@@ -17,10 +21,10 @@ HookManager::AddHook(
     if (it != hooks.end()) return nullptr;
     LPVOID pGatewayAddr;
 
-#ifndef _WIN32
-    pGatewayAddr = Hook32(Src, Dst);
-#else
+#if defined(_WIN64)
     pGatewayAddr = Hook64(Src, Dst);
+#else
+    pGatewayAddr = Hook32(Src, Dst);
 #endif
 
     // 
@@ -133,31 +137,19 @@ HookManager::Hook32(
     DWORD dwOldCodeDelta;
     DWORD dwOldProtection;
     DWORD dwRelativeAddrDstDelta;
+    DWORD overlap = 0;
+    BYTE* pSrc = Src;
 
-    // 
-    // Allocate a memory to store the code overwritten and the jump back
-    //
-    BYTE* pOldCode = reinterpret_cast<BYTE*>(VirtualAlloc(NULL, 2 * X86_TRAMPOLINE_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
-    if (pOldCode == nullptr) return nullptr;
-    // 
-    // Copy the old code before overwrite
-    //
-    memcpy_s(pOldCode, X86_TRAMPOLINE_SIZE, Src, TRAMPOLINE_SIZE);
+    ZydisDecodedInstruction inst;
 
     //
-    // Build code: jmp OldCodeDelta
+    // Disassemble to pick the instructions length 
     //
-    dwOldCodeDelta = Src - pOldCode - TRAMPOLINE_SIZE;
-    
-    //
-    // Write relative jump
-    //
-    pOldCode[(uint8_t)X86_TRAMPOLINE_SIZE] = JUMP;
-    
-    //
-    // Write destination, relative address to Dst 
-    //
-    *(DWORD_PTR*)(pOldCode + X86_TRAMPOLINE_SIZE + 1) = dwOldCodeDelta;
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&zDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X86_TRAMPOLINE_SIZE)
+    {
+        overlap += inst.length;
+        pSrc += inst.length;
+    }
     
     //
     // Change protections to for writing
@@ -165,9 +157,49 @@ HookManager::Hook32(
     if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, PAGE_READWRITE, &dwOldProtection))
     {
         std::printf("Error on replacing protection!\n");
-        VirtualFree(pOldCode, NULL, MEM_RELEASE);
         return nullptr;
     }
+
+    // 
+    // Allocate a memory to store the code overwritten and the jump back
+    //
+    DWORD allocSize = overlap + NOP_SLIDE + X86_TRAMPOLINE_SIZE;
+    BYTE* pOldCode = reinterpret_cast<BYTE*>(VirtualAlloc(NULL, allocSize, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
+    if (pOldCode == nullptr)
+    {
+        VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection);
+        return nullptr;
+    }
+
+    // 
+    // Copy the old code before overwrite
+    //
+    memcpy_s(pOldCode, overlap, Src, TRAMPOLINE_SIZE);
+    //
+    // Set old code opcodes to NOP
+    //
+    memset(Src, NOP, overlap);
+    //
+    // Build the NOP slide
+    //
+    memset(pOldCode + overlap, NOP, NOP_SLIDE);
+
+    //
+    // Build code: jmp OldCodeDelta
+    //
+    dwOldCodeDelta = Src - pOldCode - TRAMPOLINE_SIZE - NOP_SLIDE;
+    
+    //
+    // Write relative jump
+    //
+    *(BYTE*)(pOldCode + overlap + NOP_SLIDE) = JUMP;
+    
+    //
+    // Write destination, relative address to Dst 
+    //
+    *(DWORD_PTR*)(pOldCode + overlap + NOP_SLIDE + 1) = dwOldCodeDelta;
+    
+
 
     //
     // Calculate relative address

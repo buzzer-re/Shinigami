@@ -24,6 +24,18 @@
     <ClInclude Include="HookManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="defs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ProcessUnhollow.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Mem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PEDumper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -33,6 +45,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="HookManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProcessUnhollow.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PEDumper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
