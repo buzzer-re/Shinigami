@@ -6,7 +6,7 @@ Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem) const
     // Check PE headers
 
     IMAGE_DOS_HEADER dosHdr;
-    DWORD dwBytesRead;
+    SIZE_T dwBytesRead;
 
     if (!ReadProcessMemory(hProcess, mem->Addr, &dosHdr, sizeof(dosHdr), &dwBytesRead)) return nullptr;
 

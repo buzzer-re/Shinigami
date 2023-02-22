@@ -44,11 +44,25 @@ LPVOID
 HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
 {
     //
-    // Base template trampoline code to be used on next operations
+    // This is the base template trampoline code that will be used in future operations. 
+    // The "pop rax" instruction is necessary to restore the original value of the register and ensure that we don't mess up the function's logic.
+    // We don't use the "push" instruction here because this is the beginning of the function. 
+    // If this hook is going to be used in the middle of a function in the future, 
+    // we will need to push rax to the stack first to preserve its value.
     //
-    BYTE TrampolineCode[] = {
-        0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov rax, ??
-        0xFF, 0xE0                                                  // jmp rax
+    BYTE JumpToHookCode[] = {
+        0x48, 0xB8 , 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // mov rax, <Address>
+        0xFF, 0xE0,                                                    // jmp rax
+        0x58,                                                          // pop rax
+    };
+    //
+    // The stolen bytes will be saved in this buffer to execute later
+    // We push rax to preserve its value, which will be recovered by the pop rax instruction in the trampoline code
+    //
+    BYTE JumpBackCode[] = {
+        0x50,                                                          // push rax
+        0x48, 0xB8 , 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // mov rax, <Address>
+        0xFF, 0xE0,                                                    // jmp rax
     };
     // 
     // Pointer to the Src, as this will be incremented later
@@ -57,19 +71,7 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     // 
     // Holds how many bytes should be copied before place the trampoline
     //
-    BYTE overlap = 0;
-    
-    //
-    // Where will hold the stolen bytes to execute
-    //
-    BYTE JumpBackCode[X64_TRAMPOLINE_SIZE];
-    
-    //
-    // Our hook itself in the Dst
-    //
-    BYTE JumpToHookCode[X64_TRAMPOLINE_SIZE];
-    memcpy_s(JumpBackCode, X64_TRAMPOLINE_SIZE, TrampolineCode, X64_TRAMPOLINE_SIZE);
-    memcpy_s(JumpToHookCode, X64_TRAMPOLINE_SIZE, TrampolineCode, X64_TRAMPOLINE_SIZE);
+    BYTE overlap = 0;    
 
     // 
     // Dissasemble and analyze the instructions make sure that everything is aligned and working properly
@@ -97,25 +99,24 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     // Store the original code, nop everything and build the trampoline code to jump back
     //
     VirtualProtect(Src, overlap, PAGE_EXECUTE_READWRITE, &dwOldProtect);
-
     //
     // Copy the exactly instructions that should be executed, extracted by Zydis
     //
     memcpy_s(pOldCode, overlap + X64_TRAMPOLINE_SIZE + NOP_SLIDE, Src, overlap);
-    //
-    // Nop to avoid execute invalid instructions
-    //
-    memset(Src, NOP, overlap);
     // 
     // Add a NOP slide to avoid that the trampoline code mess up with some opcode
     //
     memset(pOldCode + overlap, NOP, NOP_SLIDE);
     //
+    // Nop Src to avoid execute invalid instructions
+    //
+    memset(Src, NOP, overlap);
+    //
     // Add the jump back to the next instruction
     //
-    *(ULONG_PTR*)(JumpBackCode + 2) = (ULONG_PTR)(Src + X64_TRAMPOLINE_SIZE);
+    *(ULONG_PTR*)(JumpBackCode + 3) = (ULONG_PTR)(Src + X64_TRAMPOLINE_SIZE-1);
 
-    memcpy_s(pOldCode + X64_TRAMPOLINE_SIZE + NOP_SLIDE, X64_TRAMPOLINE_SIZE, JumpBackCode, X64_TRAMPOLINE_SIZE);
+    memcpy_s(pOldCode + overlap + NOP_SLIDE, X64_TRAMPOLINE_SIZE, JumpBackCode, X64_TRAMPOLINE_SIZE);
 
     //
     // Build the trampoline code to jump to the hook function
@@ -124,7 +125,7 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
 
     memcpy_s(Src, X64_TRAMPOLINE_SIZE, JumpToHookCode, X64_TRAMPOLINE_SIZE);
     VirtualProtect(Src, X64_TRAMPOLINE_SIZE, dwOldProtect, &dwOldProtect);
-
+    
     return pOldCode;
 }
 
@@ -170,7 +171,6 @@ HookManager::Hook32(
         VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection);
         return nullptr;
     }
-
     // 
     // Copy the old code before overwrite
     //
@@ -183,29 +183,22 @@ HookManager::Hook32(
     // Build the NOP slide
     //
     memset(pOldCode + overlap, NOP, NOP_SLIDE);
-
     //
     // Build code: jmp OldCodeDelta
     //
     dwOldCodeDelta = Src - pOldCode - TRAMPOLINE_SIZE - NOP_SLIDE;
-    
     //
     // Write relative jump
     //
     *(BYTE*)(pOldCode + overlap + NOP_SLIDE) = JUMP;
-    
     //
     // Write destination, relative address to Dst 
     //
     *(DWORD_PTR*)(pOldCode + overlap + NOP_SLIDE + 1) = dwOldCodeDelta;
-    
-
-
     //
     // Calculate relative address
     //
     dwRelativeAddrDstDelta = Dst - Src - X86_TRAMPOLINE_SIZE;
-
     //
     // Write jump instruction
     //

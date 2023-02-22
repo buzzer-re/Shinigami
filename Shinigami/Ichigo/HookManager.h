@@ -4,7 +4,9 @@
 #include <Zydis/Zydis.h>
 
 #define X86_TRAMPOLINE_SIZE 5
-#define X64_TRAMPOLINE_SIZE 12
+#define X64_TRAMPOLINE_SIZE 13
+#define X64_JUMP_BACK_SIZE X64_TRAMPOLINE_SIZE
+
 
 
 #define HOOK_MAX_SIZE 2*5

@@ -7,7 +7,12 @@
 LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)
 {
     LPVOID alloc = oVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
-    if (alloc == NULL) return alloc;
+    
+    if (alloc == NULL)
+    {
+        std::printf("Error => %d\n", GetLastError());
+        return alloc;
+    }
 
     auto it = std::find(watcher.begin(), watcher.end(), alloc);
     if (it == watcher.end())
@@ -38,6 +43,11 @@ BOOL WINAPI hkCreateProcessInternalW(
     PHANDLE hNewToken
 )
 {
+
+    // Verify if is suspended
+    // change to suspended
+    // Inject itself here too
+
     BOOL status = oCreateProcessternalW(
         hUserToken,
         lpApplicationName,
@@ -81,7 +91,6 @@ DWORD WINAPI hkResumeThread(HANDLE hThread)
             if (!outfile)
             {
                 std::printf("Error opening dump!"); // notify via IPC;
-
             }
             else {
                 outfile.write(reinterpret_cast<const char*>(Hollow->Addr), Hollow->Size);
@@ -90,7 +99,9 @@ DWORD WINAPI hkResumeThread(HANDLE hThread)
             }
         }
         
-        // Not today
+        // Kill hollowed process
+        TerminateProcess(cPI.hProcess, 0);
+        // 
         ExitProcess(0);
     }
 
@@ -113,14 +124,14 @@ Memory* HuntPE()
     return PE;
 }
 
+
 VOID InitHooks()
 {
-    // TODO: Hook NT functions 
+    // TODO: Hook ntdll functions instead kernelbase
     hKernelBase = LoadLibraryA("kernelbase.dll");
     if (hKernelBase == NULL) return;
 
     BYTE* pRealVirtualAllocEx = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "VirtualAllocEx"));
-    BYTE* pRealCreateFileW    = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "CreateFileW"));
     BYTE* pRealCreateProcessW = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "CreateProcessInternalW"));
     BYTE* pRealResumeThread   = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "ResumeThread"));
 
