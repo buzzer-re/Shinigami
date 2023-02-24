@@ -37,17 +37,16 @@ int _tmain(int argc, TCHAR** argv)
         return EXIT_FAILURE;
     }
 
-    else if (argc > 2)
+    target = argv[1];
+
+    if (argc > 2)
     {
         // Well, it could only has used "prog.exe args" between quotes, right ?
-        target = argv[1];
         for (int i = 2; i < argc; ++i)
         {
             target += L" " + std::wstring(argv[i]);
         }
     } 
-    else 
-        target = (wchar_t*) argv[1];
 
     Injector injector(target);
     
