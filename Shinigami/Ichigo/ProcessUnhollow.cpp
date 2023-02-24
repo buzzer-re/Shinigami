@@ -28,6 +28,7 @@ LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize,
     return alloc;
 }
 
+
 BOOL WINAPI hkCreateProcessInternalW(
     HANDLE hUserToken,
     LPCWSTR lpApplicationName,

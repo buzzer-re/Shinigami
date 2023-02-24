@@ -41,8 +41,15 @@ bool Injector::InjectSuspended(const std::wstring& dllPath)
         goto quit;
     }
 
+    std::cout << "Injection finished, waiting status...\n";
+
+    // TODO: Implement a communication channel with the DLL
+
     ResumeThread(pi.hThread);
+    WaitForSingleObject(pi.hThread, INFINITE);
+
 quit:
+    
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
 
@@ -89,8 +96,6 @@ bool Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
         VirtualFreeEx(pi.hProcess, pLoadDLLCode, 0, MEM_RELEASE);
         return false;
     }
-
-    std::printf("Allocated injection code at 0x%llx\n", pLoadDLLCode);
 
     return true;
 }

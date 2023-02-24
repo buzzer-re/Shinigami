@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <cstring>
 #include <string>
+#include <iostream>
 
 #define INJECTED_SIZE 0x100
 
