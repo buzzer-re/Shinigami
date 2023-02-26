@@ -9,6 +9,7 @@
 
 #define DLL_NAME L".\\Ichigo.dll"
 
+
 int PrintError()
 {
     DWORD error_code = GetLastError();
@@ -27,6 +28,7 @@ int PrintError()
 
     return EXIT_FAILURE;
 }
+
 
 int _tmain(int argc, TCHAR** argv)
 {
@@ -52,6 +54,6 @@ int _tmain(int argc, TCHAR** argv)
     
     if (!injector.InjectSuspended(DLL_NAME))
         return PrintError();
-  
+    
     return EXIT_SUCCESS;
 }

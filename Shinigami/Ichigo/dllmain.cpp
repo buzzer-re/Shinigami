@@ -1,6 +1,7 @@
 // dllmain.cpp : Defines the entry point for the DLL application.
 #include "pch.h"
 #include "ProcessUnhollow.h"
+#include "Logger.h"
 
 #define DLL_NAME "Ichigo v0.1"
 
@@ -13,13 +14,20 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        // Create some kind of switch here to another type of unpackers, cli args idk
+        if (!PipeLogger::InitPipe())
+        {
+            MessageBoxA(NULL, "Unable to initialize log pipes! Exiting for safety...", "Ichigo error", MB_OK | MB_ICONERROR);
+            ExitProcess(1);
+        }
         InitHooks();
+        PipeLogger::LogInfo(L"Hooked functions, waiting...");
         break;
+
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
-        std::printf("Bye bye\n");
+        PipeLogger::LogInfo(L"Exiting...");
+        PipeLogger::ClosePipe();
         Shutdown();
         break;
     }

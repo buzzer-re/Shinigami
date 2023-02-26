@@ -142,6 +142,7 @@
     <ClInclude Include="defs.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="HookManager.h" />
+    <ClInclude Include="Logger.h" />
     <ClInclude Include="Mem.h" />
     <ClInclude Include="PEDumper.h" />
     <ClInclude Include="ProcessUnhollow.h" />
@@ -150,6 +151,7 @@
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="HookManager.cpp" />
+    <ClCompile Include="Logger.cpp" />
     <ClCompile Include="PEDumper.cpp" />
     <ClCompile Include="ProcessUnhollow.cpp" />
     <ClCompile Include="pch.cpp">

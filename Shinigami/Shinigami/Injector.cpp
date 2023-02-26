@@ -41,10 +41,10 @@ bool Injector::InjectSuspended(const std::wstring& dllPath)
         goto quit;
     }
 
-    std::cout << "Injection finished, waiting status...\n";
+    Logger::LogInfo(L"Injection finished, waiting connection...");
+    PipeLogger::InitPipe();
 
-    // TODO: Implement a communication channel with the DLL
-
+    
     ResumeThread(pi.hThread);
     WaitForSingleObject(pi.hThread, INFINITE);
 
@@ -52,6 +52,7 @@ quit:
     
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
+    PipeLogger::ClosePipe();
 
     return status;
 }

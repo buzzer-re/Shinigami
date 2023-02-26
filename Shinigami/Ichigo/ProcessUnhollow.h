@@ -10,6 +10,7 @@
 #include "Mem.h"
 #include "HookManager.h"
 #include "defs.h"
+#include "Logger.h"
 
 static HookManager manager;
 

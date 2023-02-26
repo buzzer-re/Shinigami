@@ -10,7 +10,7 @@ LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize,
     
     if (alloc == NULL)
     {
-        std::printf("Error => %d\n", GetLastError());
+        PipeLogger::LogInfo(L"Error => %d\n", GetLastError());
         return alloc;
     }
 
@@ -86,17 +86,17 @@ DWORD WINAPI hkResumeThread(HANDLE hThread)
         Memory* Hollow = HuntPE();
         if (Hollow)
         {
-            std::printf("Dumped hollow of %d bytes\n", Hollow->Size);
+            PipeLogger::LogInfo(L"Dumped hollow of %d bytes", Hollow->Size);
             std::ofstream outfile("dumped.bin", std::ios::binary);
 
             if (!outfile)
             {
-                std::printf("Error opening dump!"); // notify via IPC;
+                PipeLogger::LogInfo(L"Error opening dump!"); // notify via IPC;
             }
             else {
                 outfile.write(reinterpret_cast<const char*>(Hollow->Addr), Hollow->Size);
                 outfile.close();
-                std::puts("Saved as dumped.bin!");
+                PipeLogger::LogInfo(L"Saved as dumped.bin!");
             }
         }
         

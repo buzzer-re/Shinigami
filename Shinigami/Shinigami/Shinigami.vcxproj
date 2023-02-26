@@ -128,10 +128,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Injector.cpp" />
+    <ClCompile Include="PipeLogger.cpp" />
     <ClCompile Include="Shinigami.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Injector.h" />
+    <ClInclude Include="PipeLogger.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

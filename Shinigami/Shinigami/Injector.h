@@ -5,6 +5,8 @@
 #include <string>
 #include <iostream>
 
+#include "PipeLogger.h"
+
 #define INJECTED_SIZE 0x100
 
 typedef HMODULE(WINAPI* mLoadLibraryW) (

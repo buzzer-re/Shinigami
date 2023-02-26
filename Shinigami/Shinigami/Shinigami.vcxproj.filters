@@ -21,9 +21,15 @@
     <ClCompile Include="Injector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="PipeLogger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Injector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PipeLogger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
