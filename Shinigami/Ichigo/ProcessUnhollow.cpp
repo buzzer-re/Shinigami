@@ -10,13 +10,14 @@ LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize,
     
     if (alloc == NULL)
     {
-        PipeLogger::LogInfo(L"Error => %d\n", GetLastError());
+        PipeLogger::LogInfo(L"VirtualAlloc -- Error (%d) while calling VirtualAlloc! --", GetLastError());
         return alloc;
     }
 
     auto it = std::find(watcher.begin(), watcher.end(), alloc);
     if (it == watcher.end())
     {
+        PipeLogger::LogInfo(L"VirtualAlloc -- Monitoring allocation at 0x%llx --", alloc);
         // Create entry
         Memory* mem = new Memory;
         mem->Addr = reinterpret_cast<uint8_t*>(alloc);
@@ -76,6 +77,48 @@ BOOL WINAPI hkCreateProcessInternalW(
 }
 
 
+BOOL WINAPI hkWriteProcessMemory(
+    HANDLE  hProcess,
+    LPVOID  lpBaseAddress,
+    LPCVOID lpBuffer,
+    SIZE_T  nSize,
+    SIZE_T* lpNumberOfBytesWritten
+)
+{
+    if (nSize >= sizeof(PIMAGE_DOS_HEADER) + sizeof(PIMAGE_NT_HEADERS))
+    {
+        PIMAGE_DOS_HEADER pDOSHdr = (PIMAGE_DOS_HEADER)lpBuffer;
+        PIMAGE_NT_HEADERS pNTHdr = (PIMAGE_NT_HEADERS)((BYTE*)lpBuffer + pDOSHdr->e_lfanew);
+        if (pDOSHdr->e_magic == IMAGE_DOS_SIGNATURE && pNTHdr->Signature == IMAGE_NT_SIGNATURE)
+        {
+            PipeLogger::LogInfo(L"WriteProcessMemory -- Detected an attempt to write a PE file in another process!");
+            Memory* hollow = PEDumper::DumpPE((ULONG_PTR*) lpBuffer);
+            if (hollow)
+            {
+                PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", 12341234);
+                TerminateProcess(cPI.hProcess, 0);
+                ExitProcess(1);
+                // SaveToFile()
+            }
+
+
+        }
+    }
+
+    BOOL success = oWriteProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesWritten);
+
+    if (!success)
+    {
+        PipeLogger::LogInfo(L"WriteProcessMemory -- Error on writing process memory: %d --", GetLastError());
+        return success;
+    }
+
+    
+
+    return success;
+}
+
+
 //
 // Dump the implant before resume thread
 //
@@ -86,17 +129,17 @@ DWORD WINAPI hkResumeThread(HANDLE hThread)
         Memory* Hollow = HuntPE();
         if (Hollow)
         {
-            PipeLogger::LogInfo(L"Dumped hollow of %d bytes", Hollow->Size);
+            PipeLogger::LogInfo(L"ResumeThread -- Dumped hollow of %d bytes --", Hollow->Size);
             std::ofstream outfile("dumped.bin", std::ios::binary);
 
             if (!outfile)
             {
-                PipeLogger::LogInfo(L"Error opening dump!"); // notify via IPC;
+                PipeLogger::LogInfo(L"ResumeThread -- Error opening dump! --"); // notify via IPC;
             }
             else {
                 outfile.write(reinterpret_cast<const char*>(Hollow->Addr), Hollow->Size);
                 outfile.close();
-                PipeLogger::LogInfo(L"Saved as dumped.bin!");
+                PipeLogger::LogInfo(L"ResumeThread -- Saved as dumped.bin! --");
             }
         }
         
@@ -118,8 +161,7 @@ Memory* HuntPE()
     {
         // Perfect, the implant probably is here
         Memory* mem = watcher.back();
-        PEDumper dumper;
-        PE = dumper.FindRemotePE(cPI.hProcess, mem);
+        PE = PEDumper::FindRemotePE(cPI.hProcess, mem);
     } 
 
     return PE;
@@ -135,10 +177,13 @@ VOID InitHooks()
     BYTE* pRealVirtualAllocEx = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "VirtualAllocEx"));
     BYTE* pRealCreateProcessW = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "CreateProcessInternalW"));
     BYTE* pRealResumeThread   = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "ResumeThread"));
+    BYTE* pRealWriteProcessMemory = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "WriteProcessMemory"));
 
     oVirtualAllocEx = (pVirtualAllocEx)manager.AddHook(pRealVirtualAllocEx, (BYTE*)hkVirtualAllocEx);
     oCreateProcessternalW = (pCreateProcessternalW)manager.AddHook(pRealCreateProcessW, (BYTE*)hkCreateProcessInternalW);
     oResumeThread = (pResumeThread)manager.AddHook(pRealResumeThread, (BYTE*)hkResumeThread);
+    oWriteProcessMemory = (pWriteProcessMemory)manager.AddHook(pRealWriteProcessMemory, (BYTE*)hkWriteProcessMemory);
+   // MessageBoxA(NULL, "DF", "DF", MB_OK); Just to "break" the execution and give me time to open x64dbg :p
 }
 
 

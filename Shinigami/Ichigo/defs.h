@@ -45,3 +45,11 @@ typedef HANDLE (WINAPI* pCreateFileW) (
 typedef DWORD (WINAPI* pResumeThread) (
     HANDLE hThread
 );
+
+typedef BOOL (WINAPI* pWriteProcessMemory) (
+    HANDLE  hProcess,
+    LPVOID  lpBaseAddress,
+    LPCVOID lpBuffer,
+    SIZE_T  nSize,
+    SIZE_T* lpNumberOfBytesWritten
+);

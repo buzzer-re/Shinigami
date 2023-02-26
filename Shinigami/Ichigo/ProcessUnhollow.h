@@ -19,6 +19,7 @@ static pVirtualAllocEx       oVirtualAllocEx;
 static pCreateFileW          oCreateFileW;
 static pCreateProcessternalW oCreateProcessternalW;
 static pResumeThread         oResumeThread;
+static pWriteProcessMemory   oWriteProcessMemory;
 
 // Stolen structures
 static PROCESS_INFORMATION cPI;
@@ -59,12 +60,22 @@ BOOL WINAPI hkCreateProcessInternalW(
     PHANDLE hNewToken
 );
 
+BOOL WINAPI hkWriteProcessMemory (
+    HANDLE  hProcess,
+    LPVOID  lpBaseAddress,
+    LPCVOID lpBuffer,
+    SIZE_T  nSize,
+    SIZE_T* lpNumberOfBytesWritten
+);
+
+
 DWORD WINAPI hkResumeThread(
     HANDLE hThread
 );
 
-// Hunt for implants
+// Hunt for implants using the watcher list
 Memory* HuntPE();
+
 // Place our hooks
 VOID InitHooks();
 // Clean

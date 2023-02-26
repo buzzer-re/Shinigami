@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "PEDumper.h"
 
-Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem) const
+Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem)
 {
     // Check PE headers
 
@@ -30,4 +30,21 @@ Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem) const
     dumped->prot = PAGE_READWRITE;
 
     return dumped;
+}
+
+Memory* PEDumper::DumpPE(ULONG_PTR* Address)
+{
+
+    PIMAGE_DOS_HEADER pDOSHdr = (PIMAGE_DOS_HEADER)Address;
+    PIMAGE_NT_HEADERS pNTHdr = (PIMAGE_NT_HEADERS)((BYTE*)Address + pDOSHdr->e_lfanew);
+    Memory* mem = nullptr;
+
+    if (pDOSHdr->e_magic == IMAGE_DOS_SIGNATURE && pNTHdr->Signature == IMAGE_NT_SIGNATURE)
+    {
+        mem = new Memory;
+        mem->Addr = (uint8_t*) Address;
+        mem->Size = pNTHdr->OptionalHeader.SizeOfImage;
+    }
+    
+    return mem;
 }

@@ -2,9 +2,9 @@
 #include <Windows.h>
 #include "Mem.h"
 
-class PEDumper
+namespace PEDumper 
 {
-public:
-	Memory* FindRemotePE(HANDLE hProcess, const Memory* mem) const;
+	Memory* FindRemotePE(HANDLE hProcess, const Memory* mem);
+	Memory* DumpPE(ULONG_PTR* Address);
 };
 
