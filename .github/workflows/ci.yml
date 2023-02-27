@@ -30,6 +30,7 @@ jobs:
       run: |
         cd vcpkg
         .\vcpkg install zydis:${{ matrix.platform }}-windows
+        .\vcpkg integrate install
 
     # Build the Ichigo and Shinigami projects
     - name: Build the Ichigo and Shinigami projects
