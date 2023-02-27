@@ -1,0 +1,46 @@
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    # Install vcpkg
+    - name: Install vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+        cd vcpkg
+        .\bootstrap-vcpkg.bat
+
+    # Install vcpkg dependencies
+    - name: Install vcpkg dependencies
+      run: |
+        cd vcpkg
+        .\vcpkg install zydis:x86-windows zydis:x64-windows
+
+    # Build the Ichigo project for x86
+    - name: Build the Ichigo project for x86
+      run: |
+        cd Ichigo
+        msbuild Ichigo.vcxproj /p:Configuration=Release /p:Platform=x86
+
+    # Build the Ichigo project for x64
+    - name: Build the Ichigo project for x64
+      run: |
+        cd Ichigo
+        msbuild Ichigo.vcxproj /p:Configuration=Release /p:Platform=x64
+
+    # Build the Shinigami project for x86
+    - name: Build the Shinigami project for x86
+      run: |
+        cd Shinigami
+        msbuild Shinigami.vcxproj /p:Configuration=Release /p:Platform=x86
+
+    # Build the Shinigami project for x64
+    - name: Build the Shinigami project for x64
+      run: |
+        cd Shinigami
+        msbuildShinigami.vcxproj /p:Configuration=Release /p:Platform=x64
