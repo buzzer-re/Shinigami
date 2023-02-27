@@ -1,0 +1,54 @@
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        platform: [x86, x64]
+        releases: [/,x64]
+    steps:
+    - uses: actions/checkout@v2
+  
+  
+    - name: Install Visual Studio Build Tools
+      uses: microsoft/setup-msbuild@v1.0.2
+      with:
+        vs-version: '17.0'
+        include-prerelease: true
+
+    # Install vcpkg
+    - name: Install vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+        cd vcpkg
+        .\bootstrap-vcpkg.bat
+
+    # Install vcpkg dependencies
+    - name: Install vcpkg dependencies
+      run: |
+        cd vcpkg
+        .\vcpkg install zydis:${{ matrix.platform }}-windows
+        .\vcpkg integrate install
+
+    # Build the Ichigo and Shinigami projects
+    - name: Build the Ichigo and Shinigami projects
+      run: |
+        cd Shinigami
+        msbuild Shinigami.sln /t:Ichigo`;Shinigami /p:Configuration=Release /p:Platform=${{ matrix.platform }}
+
+    - name: Create Release and Zip Binaries
+      run: |
+        mkdir release
+        cd Shinigami/${{ matrix.releases }}/Release
+        zip -r ../../release/Shinigami.zip .
+      shell: bash
+
+    # Upload release artifacts
+    - name: Upload Release Artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: Shinigami and Ichigo Binaries
+        path: release
