@@ -5,6 +5,9 @@ on: [push]
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        platform: [x86, x64]
     steps:
     - uses: actions/checkout@v2
 
@@ -19,28 +22,10 @@ jobs:
     - name: Install vcpkg dependencies
       run: |
         cd vcpkg
-        .\vcpkg install zydis:x86-windows zydis:x64-windows
+        .\vcpkg install zydis:${{ matrix.platform }}-windows
 
-    # Build the Ichigo project for x86
-    - name: Build the Ichigo project for x86
-      run: |
-        cd Ichigo
-        msbuild Ichigo.vcxproj /p:Configuration=Release /p:Platform=x86
-
-    # Build the Ichigo project for x64
-    - name: Build the Ichigo project for x64
-      run: |
-        cd Ichigo
-        msbuild Ichigo.vcxproj /p:Configuration=Release /p:Platform=x64
-
-    # Build the Shinigami project for x86
-    - name: Build the Shinigami project for x86
+    # Build the Ichigo and Shinigami projects
+    - name: Build the Ichigo and Shinigami projects
       run: |
         cd Shinigami
-        msbuild Shinigami.vcxproj /p:Configuration=Release /p:Platform=x86
-
-    # Build the Shinigami project for x64
-    - name: Build the Shinigami project for x64
-      run: |
-        cd Shinigami
-        msbuildShinigami.vcxproj /p:Configuration=Release /p:Platform=x64
+        msbuild Shinigami.sln /t:Ichigo;Shinigami /p:Configuration=Release /p:Platform=${{ matrix.platform }}
