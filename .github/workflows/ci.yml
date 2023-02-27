@@ -37,19 +37,3 @@ jobs:
       run: |
         cd Shinigami
         msbuild Shinigami.sln /t:Ichigo`;Shinigami /p:Configuration=Release /p:Platform=${{ matrix.platform }}
-
-    - name: Create Release and Zip Binaries
-      run: |
-        mkdir release
-        cd Shinigami/bin/${{ matrix.platform }}/Release
-        zip -r ../../../release/Shinigami_${{ matrix.platform }}.zip .
-        cd ../../../Ichigo/bin/${{ matrix.platform }}/Release
-        zip -r ../../../release/Ichigo_${{ matrix.platform }}.zip .
-      shell: bash
-
-    # Upload release artifacts
-    - name: Upload Release Artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: Shinigami and Ichigo Binaries
-        path: release
