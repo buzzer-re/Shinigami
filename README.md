@@ -27,11 +27,7 @@ License
 - Open the Shinigami.sln solution file in Visual Studio and build the project.
 
 
-This tool is released under the MIT License.
-
 # Contributions
 
 Contributions are welcome! Please open an issue or pull request for any changes you would like to make.
 Contact
-
-If you have any questions or comments, feel free to contact the author at author@example.com.
