@@ -1,14 +1,10 @@
-name: Build
+name: Release
 
 on: [push]
 
 jobs:
   build:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        platform: [x86, x64]
-        releases: [/,x64]
     steps:
     - uses: actions/checkout@v2
   
@@ -30,20 +26,23 @@ jobs:
     - name: Install vcpkg dependencies
       run: |
         cd vcpkg
-        .\vcpkg install zydis:${{ matrix.platform }}-windows
+        .\vcpkg install zydis:x86-windows zydis:x64-windows
         .\vcpkg integrate install
 
     # Build the Ichigo and Shinigami projects
     - name: Build the Ichigo and Shinigami projects
       run: |
         cd Shinigami
-        msbuild Shinigami.sln /t:Ichigo`;Shinigami /p:Configuration=Release /p:Platform=${{ matrix.platform }}
+        msbuild Shinigami.sln /t:Ichigo`;Shinigami /p:Configuration=Release /p:Platform=x64
+        msbuild Shinigami.sln /t:Ichigo`;Shinigami /p:Configuration=Release /p:Platform=x86
 
     - name: Create Release and Zip Binaries
       run: |
         mkdir release
-        cd Shinigami/${{ matrix.releases }}/Release
-        zip -r ../../release/Shinigami.zip .
+        cd Shinigami/Release
+        zip -r ../../release/Shinigami-x86.zip .
+        cd Shinigami/x64/Release
+        zip -r ../../../release/Shinigami-x64.zip .
       shell: bash
 
     # Upload release artifacts
