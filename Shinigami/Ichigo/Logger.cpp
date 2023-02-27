@@ -55,8 +55,6 @@ PipeLogger::WriteToPipe(const LogMsg& logMsg)
 BOOL 
 PipeLogger::LogInfo(const wchar_t* message, ...)
 {
-
-
 	LogMsg logMsg;
 	logMsg.MessageType = INFO_LOG;
 	ZeroMemory(logMsg.message, MAX_MESSAGE_SIZE);

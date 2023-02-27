@@ -21,7 +21,7 @@ LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize,
         // Create entry
         Memory* mem = new Memory;
         mem->Addr = reinterpret_cast<uint8_t*>(alloc);
-        mem->Size = dwSize;
+        mem->Size = (DWORD) dwSize;
 
         watcher.push_back(mem);
     }
@@ -89,19 +89,25 @@ BOOL WINAPI hkWriteProcessMemory(
     {
         PIMAGE_DOS_HEADER pDOSHdr = (PIMAGE_DOS_HEADER)lpBuffer;
         PIMAGE_NT_HEADERS pNTHdr = (PIMAGE_NT_HEADERS)((BYTE*)lpBuffer + pDOSHdr->e_lfanew);
-        if (pDOSHdr->e_magic == IMAGE_DOS_SIGNATURE && pNTHdr->Signature == IMAGE_NT_SIGNATURE)
+        if (pDOSHdr->e_magic == IMAGE_DOS_SIGNATURE)
         {
             PipeLogger::LogInfo(L"WriteProcessMemory -- Detected an attempt to write a PE file in another process!");
             Memory* hollow = PEDumper::DumpPE((ULONG_PTR*) lpBuffer);
             if (hollow)
             {
-                PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", 12341234);
+                PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", hollow->Size);
+                std::wstring SaveName = Utils::BuildFilenameFromProcessName(L"_dumped_before_write.bin");
+
+                if (Utils::SaveToFile(SaveName.c_str(), hollow))
+                {
+                    PipeLogger::LogInfo(L"WriteProcessMemory: -- Saved as %s! --", SaveName.c_str());
+                }
+                else {
+                    PipeLogger::LogInfo(L"WriteProcessMemory: -- Error saving file: %d --", GetLastError());
+                }
                 TerminateProcess(cPI.hProcess, 0);
                 ExitProcess(1);
-                // SaveToFile()
             }
-
-
         }
     }
 
@@ -112,8 +118,6 @@ BOOL WINAPI hkWriteProcessMemory(
         PipeLogger::LogInfo(L"WriteProcessMemory -- Error on writing process memory: %d --", GetLastError());
         return success;
     }
-
-    
 
     return success;
 }
@@ -130,22 +134,16 @@ DWORD WINAPI hkResumeThread(HANDLE hThread)
         if (Hollow)
         {
             PipeLogger::LogInfo(L"ResumeThread -- Dumped hollow of %d bytes --", Hollow->Size);
-            std::ofstream outfile("dumped.bin", std::ios::binary);
+            std::wstring saveName = Utils::BuildFilenameFromProcessName(L"_dumped.bin");
 
-            if (!outfile)
-            {
-                PipeLogger::LogInfo(L"ResumeThread -- Error opening dump! --"); // notify via IPC;
-            }
-            else {
-                outfile.write(reinterpret_cast<const char*>(Hollow->Addr), Hollow->Size);
-                outfile.close();
-                PipeLogger::LogInfo(L"ResumeThread -- Saved as dumped.bin! --");
-            }
+            if (Utils::SaveToFile(saveName.c_str(), Hollow))
+                PipeLogger::LogInfo(L"ResumeThread -- Saved PE as %s --", saveName.c_str());
+            else
+                PipeLogger::LogInfo(L"ResumeThread -- Unable to save PE file! --");
         }
         
         // Kill hollowed process
         TerminateProcess(cPI.hProcess, 0);
-        // 
         ExitProcess(0);
     }
 

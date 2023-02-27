@@ -84,7 +84,7 @@ VOID Logger::LogInfo(const wchar_t* message, ...)
 	va_list args;
 	va_start(args, message);
 
-	fputws(L"[+] Info: ", stdout);
+	fputws(L"[+] Shinigami Info: ", stdout);
 	vfwprintf(stdout, message, args);
 	fputws(L" [+] \n", stdout);
 
