@@ -40,8 +40,8 @@ jobs:
       run: |
         mkdir release
         cd Shinigami/Release
-        Compress-Archive -LiteralPath Shinigami/Release -DestinationPath release/Shinigami-x86.zip 
-        Compress-Archive -LiteralPath Shinigami/x64/Release -DestinationPath release/Shinigami-x64.zip 
+        Compress-Archive -LiteralPath Release/ -DestinationPath release/Shinigami-x86.zip 
+        Compress-Archive -LiteralPath x64/Release -DestinationPath release/Shinigami-x64.zip 
 
     # Upload release artifacts
     - name: Upload Release Artifacts
