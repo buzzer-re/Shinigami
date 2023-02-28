@@ -1,4 +1,6 @@
 # Shinigami
+[![Build](https://github.com/buzzer-re/Shinigami/actions/workflows/ci.yml/badge.svg)](https://github.com/buzzer-re/Shinigami/actions/workflows/ci.yml)
+[![Release](https://github.com/buzzer-re/Shinigami/actions/workflows/cd.yml/badge.svg)](https://github.com/buzzer-re/Shinigami/actions/workflows/cd.yml)
 
 Shinigami is a tool to detect and dump malware implants that are injected via process hollowing technique. It works by hooking common functions like CreateProcessInternal, WriteProcessMemory, and ResumeThread. It creates the target executable in a suspended state and injects a DLL library called "Ichigo," which will hook every needed function to detect and dump the implant. The library automatically kills the process once the implant is extracted.
 
