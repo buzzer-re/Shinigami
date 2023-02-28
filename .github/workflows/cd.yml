@@ -1,8 +1,8 @@
 name: Release
 
 env:
-  X86_BUILD_PATH: "Shinigami/Shinigami/Shinigami/Release"
-  X64_BUILD_PATH: "Shinigami/Shinigami/x64/Release"
+  X86_BUILD_PATH: "Shinigami/Release"
+  X64_BUILD_PATH: "Shinigami/x64/Release"
 on: [push]
 
 jobs:
@@ -41,8 +41,8 @@ jobs:
 
     - name: Create Release and Zip Binaries
       run: |
-        Get-ChildItem -Recurse
         mkdir release
+        pwd
         Remove-Item -Path $env:X86_BUILD_PATH/*.pdb
         Remove-Item -Path $env:X64_BUILD_PATH/*.pdb
         
