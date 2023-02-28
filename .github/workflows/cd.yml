@@ -1,5 +1,8 @@
 name: Release
 
+env:
+  X86_BUILD_PATH: "Shinigami/Shinigami/Shinigami/Release"
+  X64_BUILD_PATH: "Shinigami/Shinigami/x64/Release"
 on: [push]
 
 jobs:
@@ -40,8 +43,11 @@ jobs:
       run: |
         Get-ChildItem -Recurse
         mkdir release
-        Compress-Archive -LiteralPath Release/ -DestinationPath release/Shinigami-x86.zip 
-        Compress-Archive -LiteralPath x64/Release -DestinationPath release/Shinigami-x64.zip 
+        Remove-Item -Path $env:X86_BUILD_PATH/*.pdb
+        Remove-Item -Path $env:X64_BUILD_PATH/*.pdb
+        
+        Compress-Archive -LiteralPath $env:X86_BUILD_PATH -DestinationPath release/Shinigami-x86.zip 
+        Compress-Archive -LiteralPath $env:X64_BUILD_PATH -DestinationPath release/Shinigami-x64.zip 
 
     # Upload release artifacts
     - name: Upload Release Artifacts
