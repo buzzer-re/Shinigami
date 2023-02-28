@@ -3,6 +3,7 @@ name: Release
 env:
   X86_BUILD_PATH: "Shinigami/Release"
   X64_BUILD_PATH: "Shinigami/x64/Release"
+  
 on: [push]
 
 jobs:
@@ -42,16 +43,43 @@ jobs:
     - name: Create Release and Zip Binaries
       run: |
         mkdir release
-        pwd
         Remove-Item -Path $env:X86_BUILD_PATH/*.pdb
         Remove-Item -Path $env:X64_BUILD_PATH/*.pdb
         
         Compress-Archive -LiteralPath $env:X86_BUILD_PATH -DestinationPath release/Shinigami-x86.zip 
         Compress-Archive -LiteralPath $env:X64_BUILD_PATH -DestinationPath release/Shinigami-x64.zip 
+      # Create a new release
+      
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
 
     # Upload release artifacts
     - name: Upload Release Artifacts
-      uses: actions/upload-artifact@v2
+      id: upload-release-asset-x86
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        name: Shinigami and Ichigo Binaries
-        path: release
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: release/Shinigami-x86.zip
+        asset_name: Shinigami-x86.zip
+        asset_content_type: application/zip
+
+    - name: Upload Release Artifacts
+      id: upload-release-asset-x64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: release/Shinigami-x64.zip
+        asset_name: Shinigami-x64.zip
+        asset_content_type: application/zip
