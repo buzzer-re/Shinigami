@@ -38,6 +38,7 @@ jobs:
 
     - name: Create Release and Zip Binaries
       run: |
+        tree.exe
         mkdir release
         Compress-Archive -LiteralPath Release/ -DestinationPath release/Shinigami-x86.zip 
         Compress-Archive -LiteralPath x64/Release -DestinationPath release/Shinigami-x64.zip 
