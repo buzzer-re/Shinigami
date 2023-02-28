@@ -56,8 +56,7 @@ It would be amazing if you help this project, so if you want here is the depende
 
 
 - Install Visual Studio >= 2019 with the C++ workload.
-- Install [Zydis](https://github.com/zyantific/zydis), a fast and lightweight x86/x86-64 disassembler, I recommend use the [vcpkg]
-(https://github.com/zyantific/zydis#building-zydis---using-vcpkg) method.
+- Install [Zydis](https://github.com/zyantific/zydis), a fast and lightweight x86/x86-64 disassembler, I recommend use the [vcpkg](https://github.com/zyantific/zydis#building-zydis---using-vcpkg) method.
   - Zydis is used to make sure that the api hooking more precise and to ensure that no opcode is lost when copying.
 - Open the Shinigami.sln solution file in Visual Studio and build/code the project.
 
