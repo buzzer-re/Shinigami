@@ -4,10 +4,13 @@ env:
   X86_BUILD_PATH: "Shinigami/Release"
   X64_BUILD_PATH: "Shinigami/x64/Release"
   
-on: [push]
+on:
+  push:
+    tags:
+      - 'v*' # Push events to tagged releases (i.e. v1.0, v2.0, etc.)
 
 jobs:
-  build:
+  package_release:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v2
