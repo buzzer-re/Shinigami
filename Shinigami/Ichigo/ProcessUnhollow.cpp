@@ -22,6 +22,7 @@ LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize,
         Memory* mem = new Memory;
         mem->Addr = reinterpret_cast<uint8_t*>(alloc);
         mem->Size = (DWORD) dwSize;
+        mem->safe = false;
 
         watcher.push_back(mem);
     }
@@ -105,6 +106,8 @@ BOOL WINAPI hkWriteProcessMemory(
                 else {
                     PipeLogger::LogInfo(L"WriteProcessMemory: -- Error saving file: %d --", GetLastError());
                 }
+
+                delete hollow;
                 TerminateProcess(cPI.hProcess, 0);
                 ExitProcess(1);
             }
@@ -140,8 +143,9 @@ DWORD WINAPI hkResumeThread(HANDLE hThread)
                 PipeLogger::LogInfo(L"ResumeThread -- Saved PE as %s --", saveName.c_str());
             else
                 PipeLogger::LogInfo(L"ResumeThread -- Unable to save PE file! --");
+
+            delete Hollow;
         }
-        
         // Kill hollowed process
         TerminateProcess(cPI.hProcess, 0);
         ExitProcess(0);
