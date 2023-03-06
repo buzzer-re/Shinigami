@@ -48,3 +48,15 @@ std::wstring Utils::BuildFilenameFromProcessName(const wchar_t* suffix)
     return std::wstring(exeName) + suffix;
 }
 
+MEM_ERROR Utils::IsReadWritable(ULONG_PTR* Address)
+{
+    MEMORY_BASIC_INFORMATION mbi = { 0 };
+
+    if (!VirtualQuery(Address, &mbi, sizeof(mbi)))
+    {
+        return INVALID_MEMORY_AREA;
+    }
+
+    return (MEM_ERROR) (mbi.Protect == PAGE_EXECUTE_READWRITE || mbi.Protect == PAGE_READWRITE);
+}
+
