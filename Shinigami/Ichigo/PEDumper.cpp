@@ -29,13 +29,15 @@ Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem)
     dumped->Addr = (uint8_t*) pPE;
     dumped->Size = mem->Size;
     dumped->prot = PAGE_READWRITE;
+    dumped->safe = true;
+    dumped->cAlloc = false; 
 
 
     // 
     // Make the Raw sections become the Virtual, since we are in memory
     //
     FixPESections(dumped);
-
+   
     return dumped;
 }
 
@@ -51,6 +53,7 @@ Memory* PEDumper::DumpPE(ULONG_PTR* Address)
         mem = new Memory;
         mem->Addr = (uint8_t*) Address;
         mem->Size = GetPESize(pNTHdr);
+        mem->safe = false;
     }
     
     return mem;
@@ -87,12 +90,33 @@ VOID PEDumper::FixPESections(Memory* mem)
     PIMAGE_DOS_HEADER pDosHdr = reinterpret_cast<PIMAGE_DOS_HEADER>(mem->Addr);
     PIMAGE_NT_HEADERS pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>((BYTE*)mem->Addr + pDosHdr->e_lfanew);
 
-    IMAGE_SECTION_HEADER* sectionHeaders = IMAGE_FIRST_SECTION(pNtHeader);
-
-    for (WORD i = 0; i < pNtHeader->FileHeader.NumberOfSections; i++)
-    {
-        sectionHeaders[i].PointerToRawData = sectionHeaders[i].VirtualAddress;
-        sectionHeaders[i].SizeOfRawData = sectionHeaders[i].Misc.VirtualSize;
+    // Check if the PE headers are within a valid memory region
+    if (Utils::IsReadWritable((ULONG_PTR*)pNtHeader) == INVALID_MEMORY_AREA) {
+        return;
     }
 
+    IMAGE_SECTION_HEADER* sectionHeaders = IMAGE_FIRST_SECTION(pNtHeader);
+
+    // Modify the section headers
+    for (WORD i = 0; i < pNtHeader->FileHeader.NumberOfSections; i++)
+    {
+        // Check if the section header is within a valid memory region
+        if (Utils::IsReadWritable((ULONG_PTR*)sectionHeaders) == INVALID_MEMORY_AREA) {
+            break;
+        }
+
+        // Change the section header's protection to read-write if necessary
+        DWORD dwOldProtection;
+        if (!VirtualProtect(sectionHeaders, sizeof(IMAGE_SECTION_HEADER), PAGE_READWRITE, &dwOldProtection)) {
+            break;
+        }
+
+        // Modify the section header's fields
+        sectionHeaders[i].PointerToRawData = sectionHeaders[i].VirtualAddress;
+        sectionHeaders[i].SizeOfRawData = sectionHeaders[i].Misc.VirtualSize;
+
+        // Restore the section header's original protection
+        VirtualProtect(sectionHeaders, sizeof(IMAGE_SECTION_HEADER), dwOldProtection, &dwOldProtection);
+    }
 }
+
