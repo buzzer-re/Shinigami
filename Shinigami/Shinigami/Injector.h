@@ -9,13 +9,8 @@
 
 #define INJECTED_SIZE 0x100
 
-typedef HMODULE(WINAPI* mLoadLibraryW) (
-	_In_ LPCWSTR lpLibFileName
-);
-
-
 struct ThreadData {
-	mLoadLibraryW loadLibrary;
+	decltype(LoadLibraryW) *LoadLibraryW;
 	wchar_t DllName[MAX_PATH];
 };
 
@@ -23,13 +18,11 @@ struct ThreadData {
 class Injector
 {
 public:
-	Injector(_In_ const std::wstring& procName) : procName(procName) {}
-	bool InjectSuspended(_In_ const std::wstring& dllPath);
-	bool APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::wstring& DLLName) const;
+	Injector(_In_ const std::wstring& ProcName) : ProcName(ProcName) {}
+	BOOL InjectSuspended(_In_ const std::wstring& DLLPath);
+	BOOL APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::wstring& DLLName) const;
 
 private:
-	std::wstring procName;
-
-
+	std::wstring ProcName;
 };
 

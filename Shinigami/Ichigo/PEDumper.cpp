@@ -10,12 +10,12 @@ Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem)
 
     if (!ReadProcessMemory(hProcess, mem->Addr, &dosHdr, sizeof(dosHdr), &dwBytesRead)) return nullptr;
 
-
     if (dosHdr.e_magic != IMAGE_DOS_SIGNATURE)
     {
         // TODO: Deep search, implement
         return nullptr;
     }
+
 
     LPVOID pPE = VirtualAlloc(NULL, mem->Size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (pPE == nullptr) return nullptr;
