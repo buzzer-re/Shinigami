@@ -45,15 +45,15 @@ VOID PipeLogger::ClosePipe()
 VOID PipeLogger::LoggerThread(ULONG_PTR* params)
 {
 	HANDLE hPipe = reinterpret_cast<HANDLE>(params);
-	BYTE* data = new BYTE[sizeof(LogMsg)];
+	BYTE* Data = new BYTE[sizeof(LogMsg)];
 	DWORD dwRead;
 	LogMsg* msg;
 	bool first = true;
 	while (true)
 	{
-		if (ReadFile(hPipe, data, sizeof(LogMsg), &dwRead, NULL))
+		if (ReadFile(hPipe, Data, sizeof(LogMsg), &dwRead, NULL))
 		{
-			msg = reinterpret_cast<LogMsg*>(data);
+			msg = reinterpret_cast<LogMsg*>(Data);
 
 			if (msg->MessageType == EXITING) break;
 			
@@ -75,7 +75,7 @@ VOID PipeLogger::LoggerThread(ULONG_PTR* params)
 
 	
 	Logger::LogInfo(L"Closing thread..");
-	delete[] data;
+	delete[] Data;
 	return VOID();
 }
 

@@ -18,5 +18,6 @@ struct Memory
     DWORD Size;
     DWORD prot;
     bool safe;
+    DWORD ProcessID;
     bool cAlloc;
 };

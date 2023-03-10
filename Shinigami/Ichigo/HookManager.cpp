@@ -5,9 +5,9 @@
 HookManager::HookManager()
 {
 #if defined(_WIN64)
-    ZydisDecoderInit(&zDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+    ZydisDecoderInit(&ZDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
 #else
-    ZydisDecoderInit(&zDecoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_ADDRESS_WIDTH_32);
+    ZydisDecoderInit(&ZDecoder, ZYDIS_MACHINE_MODE_LEGACY_32, ZYDIS_ADDRESS_WIDTH_32);
 #endif
 }
 
@@ -26,7 +26,6 @@ HookManager::AddHook(
 #else
     pGatewayAddr = Hook32(Src, Dst);
 #endif
-
     // 
     // Insert new hook on the manager map
     //
@@ -40,7 +39,28 @@ HookManager::AddHook(
     return pGatewayAddr;
 }
 
-LPVOID 
+VOID HookManager::DisassambleAt(_In_ ULONG_PTR* Address, _In_ SIZE_T NumberOfInstructions)
+{
+    ZydisFormatter formatter;
+    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+    CHAR Buffer[256];
+
+
+    for (SIZE_T i = 0; i < NumberOfInstructions; i++)
+    {
+        // Decode the instruction at the specified address
+        ZydisDecodedInstruction instruction;
+        ZydisDecoderDecodeBuffer(&ZDecoder, reinterpret_cast<const void*>(Address), 16, &instruction);
+
+        // Format the instruction and print it to the console
+
+        ZydisFormatterFormatInstruction(&formatter, &instruction, Buffer, sizeof(Buffer), (ZyanU64)Address);
+        std::printf("0x%x - %s\n", Address, Buffer);
+        Address = (ULONG_PTR*)((BYTE*)Address + instruction.length);
+    }
+}
+
+LPVOID
 HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
 {
     //
@@ -71,17 +91,17 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     // 
     // Holds how many bytes should be copied before place the trampoline
     //
-    BYTE overlap = 0;    
+    BYTE overlap = 0;
 
     // 
     // Dissasemble and analyze the instructions make sure that everything is aligned and working properly
     //
     ZydisDecodedInstruction inst;
-    
+
     //
     // Disassemble to pick the instructions length 
     //
-    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&zDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X64_TRAMPOLINE_SIZE)
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X64_TRAMPOLINE_SIZE)
     {
         overlap += inst.length;
         pSrc += inst.length;
@@ -114,7 +134,7 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     //
     // Add the jump back to the next instruction
     //
-    *(ULONG_PTR*)(JumpBackCode + 3) = (ULONG_PTR)(Src + X64_TRAMPOLINE_SIZE-1);
+    *(ULONG_PTR*)(JumpBackCode + 3) = (ULONG_PTR)(Src + X64_TRAMPOLINE_SIZE - 1);
 
     memcpy_s(pOldCode + overlap + NOP_SLIDE, X64_TRAMPOLINE_SIZE, JumpBackCode, X64_TRAMPOLINE_SIZE);
 
@@ -125,19 +145,20 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
 
     memcpy_s(Src, X64_TRAMPOLINE_SIZE, JumpToHookCode, X64_TRAMPOLINE_SIZE);
     VirtualProtect(Src, X64_TRAMPOLINE_SIZE, dwOldProtect, &dwOldProtect);
-    
+
     return pOldCode;
 }
 
-LPVOID 
+LPVOID
 HookManager::Hook32(
-    _In_ BYTE* Src, 
+    _In_ BYTE* Src,
     _In_ BYTE* Dst
 )
 {
-    DWORD dwOldCodeDelta;
+    ULONG_PTR dwOldCodeDelta;
+    ULONG_PTR dwRelativeAddrDstDelta;
+
     DWORD dwOldProtection;
-    DWORD dwRelativeAddrDstDelta;
     DWORD overlap = 0;
     BYTE* pSrc = Src;
 
@@ -146,16 +167,16 @@ HookManager::Hook32(
     //
     // Disassemble to pick the instructions length 
     //
-    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&zDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X86_TRAMPOLINE_SIZE)
+    while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X86_TRAMPOLINE_SIZE)
     {
         overlap += inst.length;
         pSrc += inst.length;
     }
-    
+
     //
     // Change protections to for writing
     //
-    if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, PAGE_READWRITE, &dwOldProtection))
+    if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, PAGE_EXECUTE_READWRITE, &dwOldProtection))
     {
         std::printf("Error on replacing protection!\n");
         return nullptr;
@@ -217,5 +238,5 @@ HookManager::Hook32(
         return nullptr;
     }
 
-    return (LPVOID) pOldCode;
+    return (LPVOID)pOldCode;
 }
