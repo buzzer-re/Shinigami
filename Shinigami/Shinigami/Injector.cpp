@@ -1,13 +1,15 @@
 #include "Injector.h"
 
 
-VOID __stdcall LoadDLL(ULONG_PTR parameter)
+VOID __stdcall LoadDLL(ULONG_PTR Params)
 {
-    ThreadData* th = reinterpret_cast<ThreadData*>(parameter);
-    th->loadLibrary(th->DllName);
+    ThreadData* ThData = reinterpret_cast<ThreadData*>(Params);
+    ThData->LoadLibraryW(ThData->DllName);
 }
 
-bool Injector::InjectSuspended(const std::wstring& dllPath)
+// Create a suspended process
+// Inject the DLL using APC callbacks
+BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath)
 {
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
@@ -19,7 +21,7 @@ bool Injector::InjectSuspended(const std::wstring& dllPath)
     // Create process suspended
     bool status = CreateProcess(
         nullptr,
-        (LPWSTR) procName.c_str(),
+        (LPWSTR)ProcName.c_str(),
         NULL,
         NULL,
         NULL,
@@ -33,7 +35,7 @@ bool Injector::InjectSuspended(const std::wstring& dllPath)
     if (!status) return false;
 
     // Inject DLL using APC
-    status = APCLoadDLL(pi, dllPath);
+    status = APCLoadDLL(pi, DLLPath);
 
     if (!status)
     {
@@ -49,7 +51,6 @@ bool Injector::InjectSuspended(const std::wstring& dllPath)
     WaitForSingleObject(pi.hThread, INFINITE);
 
 quit:
-    
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
     PipeLogger::ClosePipe();
@@ -57,13 +58,13 @@ quit:
     return status;
 }
 
-/// Inject a APC callback to be called before the suspended process entrypoint that will load the target DLL by calling LoadLibrary
-bool Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::wstring& DLLName) const
+// Inject a APC callback to be called before the suspended process entrypoint that will load the target DLL by calling LoadLibrary
+BOOL Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::wstring& DLLName) const
 {
     // Setup thread data
     ThreadData th;
     SIZE_T BytesWritten;
-    th.loadLibrary = reinterpret_cast<mLoadLibraryW>(LoadLibraryW);
+    th.LoadLibraryW = LoadLibraryW;
 
     wmemcpy_s(th.DllName, MAX_PATH, DLLName.c_str(), DLLName.size() + 1);
     
@@ -82,7 +83,6 @@ bool Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
         VirtualFreeEx(pi.hProcess, pThreadData, 0, MEM_RELEASE);
         return false;
     }
-
 
     if (!WriteProcessMemory(pi.hProcess, pLoadDLLCode, LoadDLL, INJECTED_SIZE, &BytesWritten))
     {

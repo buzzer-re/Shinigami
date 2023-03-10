@@ -13,71 +13,69 @@
 #include "Utils.h"
 #include "Logger.h"
 
-static HookManager manager;
+//
+// Unhollow namespace containing the Information struct which holds the hooks and system pointers
+//
+namespace Unhollow
+{
+    static struct Information
+    {
+        HookManager hkManager;
+        HMODULE NTDLL;
+        BOOL DumptAtResume;
+        PROCESS_INFORMATION pi;
+        std::vector<Memory*> Watcher;
 
-// Real hooked function address
-static pVirtualAllocEx       oVirtualAllocEx;
-static pCreateFileW          oCreateFileW;
-static pCreateProcessternalW oCreateProcessternalW;
-static pResumeThread         oResumeThread;
-static pWriteProcessMemory   oWriteProcessMemory;
+        struct {
+            NtAllocateVirtualMemory*    NtAllocateVirtualMemory;
+            NtWriteVirtualMemory*       NtWriteVirtualMemory;
+            NtCreateUserProcess*        NtCreateUserProcess;
+            NtResumeThread*             NtResumeThread;
+        } Win32Pointers;
 
-// Stolen structures
-static PROCESS_INFORMATION cPI;
+    } ProcessInformation;
 
-// Modules handles
-static HMODULE hKernelBase;
-static HMODULE hKernel32;
+    static NTSTATUS WINAPI hkNtAllocateVirtualMemory(
+        HANDLE      ProcessHandle,
+        PVOID* BaseAddress,
+        ULONG_PTR   ZeroBits,
+        PSIZE_T     RegionSize,
+        ULONG       AllocationType,
+        ULONG       Protect
+    );
 
-// flags
-static BOOL DumpAtResume = FALSE;
+    static NTSTATUS WINAPI hkNtWriteVirtualMemory(
+        HANDLE    ProcessHandle,
+        PVOID     BaseAddress,
+        PVOID     Buffer,
+        ULONG     NumberOfBytesToWrite,
+        PULONG    NumberOfBytesWritten
+    );
 
+    static NTSTATUS WINAPI hkNtCreateUserProcess
+    (
+            PHANDLE ProcessHandle,
+            PHANDLE ThreadHandle,
+            ACCESS_MASK ProcessDesiredAccess,
+            ACCESS_MASK ThreadDesiredAccess,
+            POBJECT_ATTRIBUTES ProcessObjectAttributes,
+            POBJECT_ATTRIBUTES ThreadObjectAttributes,
+            ULONG ProcessFlags,
+            ULONG ThreadFlags,
+            PRTL_USER_PROCESS_PARAMETERS ProcessParameters,
+            PPS_CREATE_INFO CreateInfo,
+            PPS_ATTRIBUTE_LIST AttributeList
+     );
 
+    static NTSTATUS WINAPI hkNtResumeThread(
+        HANDLE ThreadHandle,
+        PULONG SuspendCount
+    );
 
-// Used to monitor all allocations
-static std::vector<Memory*> watcher;
-
-
-LPVOID WINAPI hkVirtualAllocEx(
-    HANDLE hProcess,
-    LPVOID lpAddress,
-    SIZE_T dwSize,
-    DWORD  flAllocationType,
-    DWORD  flProtect
-);
-
-BOOL WINAPI hkCreateProcessInternalW(
-    HANDLE hUserToken,
-    LPCWSTR lpApplicationName,
-    LPWSTR lpCommandLine,
-    LPSECURITY_ATTRIBUTES lpProcessAttributes,
-    LPSECURITY_ATTRIBUTES lpThreadAttributes,
-    BOOL bheritHandles,
-    DWORD dwCreationFlags,
-    LPVOID lpEnvironment,
-    LPCWSTR lpCurrentDirectory,
-    LPSTARTUPINFOW lpStartupinfo,
-    LPPROCESS_INFORMATION lpProcessformation,
-    PHANDLE hNewToken
-);
-
-BOOL WINAPI hkWriteProcessMemory (
-    HANDLE  hProcess,
-    LPVOID  lpBaseAddress,
-    LPCVOID lpBuffer,
-    SIZE_T  nSize,
-    SIZE_T* lpNumberOfBytesWritten
-);
-
-
-DWORD WINAPI hkResumeThread(
-    HANDLE hThread
-);
-
-// Hunt for implants using the watcher list
-Memory* HuntPE();
+    Memory* HuntPE();
+}
 
 // Place our hooks
-VOID InitHooks();
+BOOL InitHooks();
 // Clean
 VOID Shutdown();

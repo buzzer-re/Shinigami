@@ -19,7 +19,12 @@ BOOL APIENTRY DllMain( HMODULE hModule,
             MessageBoxA(NULL, "Unable to initialize log pipes! Exiting for safety...", "Ichigo error", MB_OK | MB_ICONERROR);
             ExitProcess(1);
         }
-        InitHooks();
+        if (!InitHooks())
+        {
+            MessageBoxA(NULL, "Unable to place our hooks! Exiting for safety...", "Ichigo erro", MB_OK | MB_ICONERROR);
+            ExitProcess(1);
+        }
+
         PipeLogger::LogInfo(L"Hooked functions, waiting...");
         break;
 

@@ -2,124 +2,86 @@
 #include "ProcessUnhollow.h"
 
 //
-// Monitore every remote allocation on the suspended process
+// Monitore Allocation and saves the target PID
 // 
-LPVOID WINAPI hkVirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)
+NTSTATUS WINAPI Unhollow::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect)
 {
-    LPVOID alloc = oVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
+    NTSTATUS status = ProcessInformation.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
+   
+    DWORD ProcessPID = GetProcessId(ProcessHandle);
+    if (ProcessPID == Unhollow::ProcessInformation.pi.dwProcessId && NT_SUCCESS(status))
+    {
+        if (BaseAddress == nullptr)
+        {
+            PipeLogger::LogInfo(L"NtAllocateVirtualMemory -- Error: returned allocation address is null Last error code: %d!", GetLastError());
+            return status;
+        }
+        //
+        // Search if we already have this entry
+        //
+        auto& Watcher = Unhollow::ProcessInformation.Watcher;
+        auto it = std::find_if(Watcher.begin(), Watcher.end(), [BaseAddress](Memory* mem) { return mem->Addr == (uint8_t*) BaseAddress; });
+        if (it == Watcher.end())
+        {
+            PipeLogger::LogInfo(L"NtAllocateVirtualMemory -- Monitoring memory at 0x%llx --", BaseAddress);
+            //
+            // Create a memoryu entry that will be used later when hunting the PE in memory
+            //
+            Memory* mem = new Memory;
+            mem->Addr = reinterpret_cast<uint8_t*>(*BaseAddress);
+            mem->Size = (DWORD)*RegionSize;
+            mem->safe = false;
+            mem->ProcessID = GetProcessId(ProcessHandle);
+
+            Watcher.push_back(mem);
+        }
+    }
     
-    if (alloc == NULL)
-    {
-        PipeLogger::LogInfo(L"VirtualAlloc -- Error (%d) while calling VirtualAlloc! --", GetLastError());
-        return alloc;
-    }
-
-    auto it = std::find(watcher.begin(), watcher.end(), alloc);
-    if (it == watcher.end())
-    {
-        PipeLogger::LogInfo(L"VirtualAlloc -- Monitoring allocation at 0x%llx --", alloc);
-        // Create entry
-        Memory* mem = new Memory;
-        mem->Addr = reinterpret_cast<uint8_t*>(alloc);
-        mem->Size = (DWORD) dwSize;
-        mem->safe = false;
-
-        watcher.push_back(mem);
-    }
-
-    return alloc;
-}
-
-
-BOOL WINAPI hkCreateProcessInternalW(
-    HANDLE hUserToken,
-    LPCWSTR lpApplicationName,
-    LPWSTR lpCommandLine,
-    LPSECURITY_ATTRIBUTES lpProcessAttributes,
-    LPSECURITY_ATTRIBUTES lpThreadAttributes,
-    BOOL bheritHandles,
-    DWORD dwCreationFlags,
-    LPVOID lpEnvironment,
-    LPCWSTR lpCurrentDirectory,
-    LPSTARTUPINFOW lpStartupinfo,
-    LPPROCESS_INFORMATION lpProcessformation,
-    PHANDLE hNewToken
-)
-{
-
-    // Verify if is suspended
-    // change to suspended
-    // Inject itself here too
-
-    BOOL status = oCreateProcessternalW(
-        hUserToken,
-        lpApplicationName,
-        lpCommandLine,
-        lpProcessAttributes,
-        lpThreadAttributes,
-        bheritHandles,
-        dwCreationFlags,
-        lpEnvironment,
-        lpCurrentDirectory,
-        lpStartupinfo,
-        lpProcessformation,
-        hNewToken
-    );
-
-    if (status && dwCreationFlags == CREATE_SUSPENDED) {
-        // Copy process information, also notify the Shinigami process that this is happened
-        // TODO: Log system to the remote process
-        DumpAtResume = TRUE;
-        memcpy(&cPI, lpProcessformation, sizeof(cPI));
-    }
-
-
     return status;
 }
 
-
-BOOL WINAPI hkWriteProcessMemory(
-    HANDLE  hProcess,
-    LPVOID  lpBaseAddress,
-    LPCVOID lpBuffer,
-    SIZE_T  nSize,
-    SIZE_T* lpNumberOfBytesWritten
-)
+NTSTATUS WINAPI Unhollow::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToWrite, PULONG NumberOfBytesWritten)
 {
-    if (nSize >= sizeof(PIMAGE_DOS_HEADER) + sizeof(PIMAGE_NT_HEADERS))
+    DWORD MonitoredPID = Unhollow::ProcessInformation.pi.dwProcessId;//Unhollow::ProcessInformation.pi.dwProcessId;
+
+    if (GetProcessId(ProcessHandle) == MonitoredPID &&
+        NumberOfBytesToWrite >= sizeof(PIMAGE_DOS_HEADER) + sizeof(PIMAGE_NT_HEADERS))
     {
-        PIMAGE_DOS_HEADER pDOSHdr = (PIMAGE_DOS_HEADER)lpBuffer;
-        PIMAGE_NT_HEADERS pNTHdr = (PIMAGE_NT_HEADERS)((BYTE*)lpBuffer + pDOSHdr->e_lfanew);
+        PIMAGE_DOS_HEADER pDOSHdr = (PIMAGE_DOS_HEADER)Buffer;
+
         if (pDOSHdr->e_magic == IMAGE_DOS_SIGNATURE)
-        {
-            PipeLogger::LogInfo(L"WriteProcessMemory -- Detected an attempt to write a PE file in another process!");
-            Memory* hollow = PEDumper::DumpPE((ULONG_PTR*) lpBuffer);
+        {   
+            PipeLogger::LogInfo(L"NtWriteVirtualMemory -- Detected an attempt to write a PE file in another process!");
+            Memory* hollow = PEDumper::DumpPE((ULONG_PTR*)Buffer);
             if (hollow)
             {
+                // TODO: Add a INPUT option here to continue or not, because i've seem some loaders that fix the ImageBase field with the reloc delta before write the process
+                // if the PE has a realocation table
+                // In this scenario is good to continue, since the resume one will already be fixed
                 PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", hollow->Size);
                 std::wstring SaveName = Utils::BuildFilenameFromProcessName(L"_dumped_before_write.bin");
 
                 if (Utils::SaveToFile(SaveName.c_str(), hollow))
                 {
-                    PipeLogger::LogInfo(L"WriteProcessMemory: -- Saved as %s! --", SaveName.c_str());
+                    PipeLogger::LogInfo(L"NtWriteVirtualMemory: -- Saved as %s! --", SaveName.c_str());
                 }
                 else {
-                    PipeLogger::LogInfo(L"WriteProcessMemory: -- Error saving file: %d --", GetLastError());
+                    PipeLogger::LogInfo(L"NtWriteVirtualMemory: -- Error saving file: %d --", GetLastError());
                 }
 
                 delete hollow;
-                TerminateProcess(cPI.hProcess, 0);
+                TerminateProcess(Unhollow::ProcessInformation.pi.hProcess, 0);
                 ExitProcess(1);
             }
         }
+
     }
 
-    BOOL success = oWriteProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesWritten);
+    NTSTATUS success = Unhollow::ProcessInformation.Win32Pointers.NtWriteVirtualMemory(ProcessHandle, BaseAddress, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten);
 
-    if (!success)
+    if (!NT_SUCCESS(success))
     {
-        PipeLogger::LogInfo(L"WriteProcessMemory -- Error on writing process memory: %d --", GetLastError());
-        return success;
+        PipeLogger::LogInfo(L"NtWriteVirtualMemory -- Error on writing process memory: %d --", GetLastError());
     }
 
     return success;
@@ -127,71 +89,138 @@ BOOL WINAPI hkWriteProcessMemory(
 
 
 //
-// Dump the implant before resume thread
+// Monitor every process creation until find a suspended
 //
-DWORD WINAPI hkResumeThread(HANDLE hThread)
+NTSTATUS WINAPI Unhollow::hkNtCreateUserProcess(
+    PHANDLE ProcessHandle,
+    PHANDLE ThreadHandle,
+    ACCESS_MASK ProcessDesiredAccess,
+    ACCESS_MASK ThreadDesiredAccess,
+    POBJECT_ATTRIBUTES ProcessObjectAttributes,
+    POBJECT_ATTRIBUTES ThreadObjectAttributes,
+    ULONG ProcessFlags,
+    ULONG ThreadFlags,
+    PRTL_USER_PROCESS_PARAMETERS ProcessParameters,
+    PPS_CREATE_INFO CreateInfo,
+    PPS_ATTRIBUTE_LIST AttributeList
+) {
+    // Call the original function and store its return value
+    NTSTATUS status = Unhollow::ProcessInformation.Win32Pointers.NtCreateUserProcess(
+        ProcessHandle,
+        ThreadHandle,
+        ProcessDesiredAccess,
+        ThreadDesiredAccess,
+        ProcessObjectAttributes,
+        ThreadObjectAttributes,
+        ProcessFlags,
+        ThreadFlags,
+        ProcessParameters,
+        CreateInfo,
+        AttributeList
+    );
+
+    // Check if the process was successfully created and is suspended
+    if (NT_SUCCESS(status) && (ProcessFlags & CREATE_SUSPENDED) == CREATE_SUSPENDED) {
+        // Copy the process information to the global ProcessInformation object
+        Unhollow::ProcessInformation.DumptAtResume  = TRUE;
+        Unhollow::ProcessInformation.pi.dwProcessId = GetProcessId(*ProcessHandle);
+        Unhollow::ProcessInformation.pi.dwThreadId  = GetThreadId(*ThreadHandle);
+        Unhollow::ProcessInformation.pi.hProcess    = *ProcessHandle;
+
+        // Log information about the newly created process
+        PipeLogger::LogInfo(L"Created process %d in a suspended state, monitoring for memory writes...", Unhollow::ProcessInformation.pi.dwProcessId);
+    }
+
+    // Return the status code from the original function
+    return status;
+}
+
+NTSTATUS WINAPI Unhollow::hkNtResumeThread(HANDLE ThreadHandle, PULONG SuspendCount)
 {
+
     // TODO: Refactore this
-    if (DumpAtResume && cPI.hThread == hThread) {
-        Memory* Hollow = HuntPE();
+    DWORD ThreadId = GetThreadId(ThreadHandle);
+
+    if (Unhollow::ProcessInformation.DumptAtResume && Unhollow::ProcessInformation.pi.dwThreadId == ThreadId) {
+        PipeLogger::LogInfo(L"NtResumeThread -- Called resume in the injected target, starting dump! --");
+        Memory* Hollow = Unhollow::HuntPE();
         if (Hollow)
         {
-            PipeLogger::LogInfo(L"ResumeThread -- Dumped hollow of %d bytes --", Hollow->Size);
+            PipeLogger::LogInfo(L"NtResumeThread -- Dumped hollow of %d bytes --", Hollow->Size);
             std::wstring saveName = Utils::BuildFilenameFromProcessName(L"_dumped.bin");
 
             if (Utils::SaveToFile(saveName.c_str(), Hollow))
-                PipeLogger::LogInfo(L"ResumeThread -- Saved PE as %s --", saveName.c_str());
+                PipeLogger::LogInfo(L"NtResumeThread -- Saved PE as %s --", saveName.c_str());
             else
-                PipeLogger::LogInfo(L"ResumeThread -- Unable to save PE file! --");
+                PipeLogger::LogInfo(L"NtResumeThread -- Unable to save PE file! --");
 
             delete Hollow;
         }
+        else
+        {
+            PipeLogger::LogInfo(L"NtResumeThread -- Unable to dump, error code: %d. Exiting for safety --", GetLastError());
+        }
+        //
         // Kill hollowed process
-        TerminateProcess(cPI.hProcess, 0);
+        //
+        TerminateProcess(Unhollow::ProcessInformation.pi.hProcess, 0);
         ExitProcess(0);
     }
 
-    return 0;
+    return Unhollow::ProcessInformation.Win32Pointers.NtResumeThread(ThreadHandle, SuspendCount);
 }
 
-Memory* HuntPE()
+
+Memory* Unhollow::HuntPE()
 {
     Memory* PE = nullptr;
     // Walk the watch list and Hunt for the PE headers
     // TODO: Handle erased PE headers
-    if (watcher.size() == 1)
+
+    for (auto& MemEntry : Unhollow::ProcessInformation.Watcher)
     {
-        // Perfect, the implant probably is here
-        Memory* mem = watcher.back();
-        PE = PEDumper::FindRemotePE(cPI.hProcess, mem);
-    } 
+        if (MemEntry->ProcessID == Unhollow::ProcessInformation.pi.dwProcessId)
+        {
+            PE = PEDumper::FindRemotePE(Unhollow::ProcessInformation.pi.hProcess, MemEntry);
+                
+            if (PE != nullptr)
+                break;
+        }
+    }
 
     return PE;
 }
 
 
-VOID InitHooks()
+//
+// Hook every NT function related to the Process Hollowing technique
+//
+BOOL InitHooks()
 {
-    // TODO: Hook ntdll functions instead kernelbase
-    hKernelBase = LoadLibraryA("kernelbase.dll");
-    if (hKernelBase == NULL) return;
+    HMODULE NTDLL = GetModuleHandleA("NTDLL.DLL");
+    if (NTDLL == NULL)
+        return FALSE;
 
-    BYTE* pRealVirtualAllocEx = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "VirtualAllocEx"));
-    BYTE* pRealCreateProcessW = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "CreateProcessInternalW"));
-    BYTE* pRealResumeThread   = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "ResumeThread"));
-    BYTE* pRealWriteProcessMemory = reinterpret_cast<BYTE*>(GetProcAddress(hKernelBase, "WriteProcessMemory"));
+    Unhollow::ProcessInformation.NTDLL = NTDLL;
+    auto& Manager = Unhollow::ProcessInformation.hkManager;
 
-    oVirtualAllocEx = (pVirtualAllocEx)manager.AddHook(pRealVirtualAllocEx, (BYTE*)hkVirtualAllocEx);
-    oCreateProcessternalW = (pCreateProcessternalW)manager.AddHook(pRealCreateProcessW, (BYTE*)hkCreateProcessInternalW);
-    oResumeThread = (pResumeThread)manager.AddHook(pRealResumeThread, (BYTE*)hkResumeThread);
-    oWriteProcessMemory = (pWriteProcessMemory)manager.AddHook(pRealWriteProcessMemory, (BYTE*)hkWriteProcessMemory);
-   // MessageBoxA(NULL, "DF", "DF", MB_OK); Just to "break" the execution and give me time to open x64dbg :p
+    BYTE* NtResumeThreadPointer                                         = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtResumeThread"));
+    BYTE* NtAllocateVirtualMemoryPointer                                = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtAllocateVirtualMemory"));
+    BYTE* NtWriteVirtualMemoryPointer                                   = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
+    BYTE* NtCreateUserProcessPointer                                    = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtCreateUserProcess"));
+
+    Unhollow::ProcessInformation.Win32Pointers.NtAllocateVirtualMemory  = (NtAllocateVirtualMemory*)Manager.AddHook(NtAllocateVirtualMemoryPointer, (BYTE*)Unhollow::hkNtAllocateVirtualMemory);
+    Unhollow::ProcessInformation.Win32Pointers.NtWriteVirtualMemory     = (NtWriteVirtualMemory*)Manager.AddHook(NtWriteVirtualMemoryPointer, (BYTE*)Unhollow::hkNtWriteVirtualMemory);
+    Unhollow::ProcessInformation.Win32Pointers.NtCreateUserProcess      = (NtCreateUserProcess*)Manager.AddHook(NtCreateUserProcessPointer, (BYTE*)Unhollow::hkNtCreateUserProcess);
+    Unhollow::ProcessInformation.Win32Pointers.NtResumeThread           = (NtResumeThread*)Manager.AddHook(NtResumeThreadPointer, (BYTE*)Unhollow::hkNtResumeThread);
+    
+    return TRUE;
 }
 
 
 VOID Shutdown()
 {
-    for (auto& addr : watcher)
+    for (auto& addr : Unhollow::ProcessInformation.Watcher)
     {
         delete addr;
     }
