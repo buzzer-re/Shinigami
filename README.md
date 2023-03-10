@@ -7,7 +7,7 @@
 </figure>
 
 
-Shinigami is an experimental tool to detect and dump malware implants that are injected via process hollowing. It works by hooking common functions like CreateProcessInternal, WriteProcessMemory, and ResumeThread.
+Shinigami is an experimental tool to detect and dump malware implants that are injected via process hollowing. It works by hooking NT functions like NtCreateUserProcess, NtWriteVirtualMemory and NtResumeThread.
 
 It creates the target executable in a suspended state and injects a DLL library called "Ichigo," which will hook every needed function to detect and dump the implant. The library automatically kills the process once the hollow is extracted.
 
@@ -20,10 +20,10 @@ It creates the target executable in a suspended state and injects a DLL library 
 ## Current detection methods
 
 - ResumeThread
-  - By hooking ResumeThread it will hunt inside all the previous allocated memory via `VirtualAllocEx` if contains the DOS header signature, if found the remote PE file will be extracted, patched to have the sections aligned  and saved in disk with the format ***\<executable\>_dumped.bin***.
+  - By hooking NtResumeThread it will hunt inside all the previous allocated memory via `NtAllocateVirtualMemory` if contains the DOS header signature, if found the remote PE file will be extracted, patched to have the sections aligned  and saved in disk with the format ***\<executable\>_dumped.bin***.
   
 - WriteProcessMemory
-  - By hooking WriteProcessMemory it will detect if the executable is trying to write a PE file in the remote process, if so, it will hunt using the `lpBuffer` pointer and extract any PE files found in the executable itself (not the injected), this PE file saved as ***\<executable\>_before_written.bin***.
+  - By hooking NtWriteVirtualMemory it will detect if the executable is trying to write a PE file in the remote process, if so, it will hunt using the `Buffer` pointer and extract any PE files found in the executable itself (not the injected), this PE file saved as ***\<executable\>_before_written.bin***.
 
 
 ## Usage
