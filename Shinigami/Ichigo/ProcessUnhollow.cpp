@@ -104,6 +104,7 @@ NTSTATUS WINAPI Unhollow::hkNtCreateUserProcess(
     PPS_CREATE_INFO CreateInfo,
     PPS_ATTRIBUTE_LIST AttributeList
 ) {
+    PipeLogger::LogInfo(L"NtCreateUserProcess -- Called for: %s --", ProcessParameters->ImagePathName.Buffer);
     // Call the original function and store its return value
     NTSTATUS status = Unhollow::ProcessInformation.Win32Pointers.NtCreateUserProcess(
         ProcessHandle,
@@ -128,7 +129,12 @@ NTSTATUS WINAPI Unhollow::hkNtCreateUserProcess(
         Unhollow::ProcessInformation.pi.hProcess    = *ProcessHandle;
 
         // Log information about the newly created process
-        PipeLogger::LogInfo(L"Created process %d in a suspended state, monitoring for memory writes...", Unhollow::ProcessInformation.pi.dwProcessId);
+        PipeLogger::LogInfo(L"NtCreateUserProcess: -- Monitoring suspended process %d for memory writes... --", Unhollow::ProcessInformation.pi.dwProcessId);
+    } 
+    
+    else if (!NT_SUCCESS(status))
+    {
+        PipeLogger::LogInfo(L"NtCreateUserProcess: -- Error creating %s -> %d --", ProcessParameters->ImagePathName.Buffer, GetLastError());
     }
 
     // Return the status code from the original function
