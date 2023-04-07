@@ -167,3 +167,10 @@ typedef NTSTATUS (WINAPI NtCreateUserProcess)
     PPS_ATTRIBUTE_LIST AttributeList
 );
 
+
+struct WinAPIPointers {
+    NtAllocateVirtualMemory* NtAllocateVirtualMemory;
+    NtWriteVirtualMemory* NtWriteVirtualMemory;
+    NtCreateUserProcess* NtCreateUserProcess;
+    NtResumeThread* NtResumeThread;
+};

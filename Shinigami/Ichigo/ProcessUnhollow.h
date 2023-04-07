@@ -20,19 +20,11 @@ namespace Unhollow
 {
     static struct Information
     {
-        HookManager hkManager;
         HMODULE NTDLL;
         BOOL DumptAtResume;
         PROCESS_INFORMATION pi;
         std::vector<Memory*> Watcher;
-
-        struct {
-            NtAllocateVirtualMemory*    NtAllocateVirtualMemory;
-            NtWriteVirtualMemory*       NtWriteVirtualMemory;
-            NtCreateUserProcess*        NtCreateUserProcess;
-            NtResumeThread*             NtResumeThread;
-        } Win32Pointers;
-
+        WinAPIPointers Win32Pointers;
     } ProcessInformation;
 
     static NTSTATUS WINAPI hkNtAllocateVirtualMemory(
@@ -76,6 +68,6 @@ namespace Unhollow
 }
 
 // Place our hooks
-BOOL InitHooks();
+BOOL InitUnhollowHooks(HookManager& hkManager);
 // Clean
 VOID Shutdown();
