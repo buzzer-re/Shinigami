@@ -201,25 +201,24 @@ Memory* Unhollow::HuntPE()
 //
 // Hook every NT function related to the Process Hollowing technique
 //
-BOOL InitHooks()
+BOOL InitUnhollowHooks(HookManager& hkManager)
 {
     HMODULE NTDLL = GetModuleHandleA("NTDLL.DLL");
     if (NTDLL == NULL)
         return FALSE;
 
     Unhollow::ProcessInformation.NTDLL = NTDLL;
-    auto& Manager = Unhollow::ProcessInformation.hkManager;
-
     BYTE* NtResumeThreadPointer                                         = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtResumeThread"));
     BYTE* NtAllocateVirtualMemoryPointer                                = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtAllocateVirtualMemory"));
     BYTE* NtWriteVirtualMemoryPointer                                   = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
     BYTE* NtCreateUserProcessPointer                                    = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtCreateUserProcess"));
 
-    Unhollow::ProcessInformation.Win32Pointers.NtAllocateVirtualMemory  = (NtAllocateVirtualMemory*)Manager.AddHook(NtAllocateVirtualMemoryPointer, (BYTE*)Unhollow::hkNtAllocateVirtualMemory);
-    Unhollow::ProcessInformation.Win32Pointers.NtWriteVirtualMemory     = (NtWriteVirtualMemory*)Manager.AddHook(NtWriteVirtualMemoryPointer, (BYTE*)Unhollow::hkNtWriteVirtualMemory);
-    Unhollow::ProcessInformation.Win32Pointers.NtCreateUserProcess      = (NtCreateUserProcess*)Manager.AddHook(NtCreateUserProcessPointer, (BYTE*)Unhollow::hkNtCreateUserProcess);
-    Unhollow::ProcessInformation.Win32Pointers.NtResumeThread           = (NtResumeThread*)Manager.AddHook(NtResumeThreadPointer, (BYTE*)Unhollow::hkNtResumeThread);
+    Unhollow::ProcessInformation.Win32Pointers.NtAllocateVirtualMemory  = (NtAllocateVirtualMemory*)hkManager.AddHook(NtAllocateVirtualMemoryPointer, (BYTE*)Unhollow::hkNtAllocateVirtualMemory);
+    Unhollow::ProcessInformation.Win32Pointers.NtWriteVirtualMemory     = (NtWriteVirtualMemory*)hkManager.AddHook(NtWriteVirtualMemoryPointer, (BYTE*)Unhollow::hkNtWriteVirtualMemory);
+    Unhollow::ProcessInformation.Win32Pointers.NtCreateUserProcess      = (NtCreateUserProcess*)hkManager.AddHook(NtCreateUserProcessPointer, (BYTE*)Unhollow::hkNtCreateUserProcess);
+    Unhollow::ProcessInformation.Win32Pointers.NtResumeThread           = (NtResumeThread*)hkManager.AddHook(NtResumeThreadPointer, (BYTE*)Unhollow::hkNtResumeThread);
     
+    PipeLogger::LogInfo(L"Unhollow: -- Hooked Process Unhollow functions --");
     return TRUE;
 }
 
