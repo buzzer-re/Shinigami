@@ -71,3 +71,5 @@ PipeLogger::LogInfo(const wchar_t* message, ...)
 	return WriteToPipe(logMsg);
 }
 
+
+

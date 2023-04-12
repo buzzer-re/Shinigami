@@ -61,7 +61,7 @@ NTSTATUS WINAPI Unhollow::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID Bas
                 PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", hollow->Size);
                 std::wstring SaveName = Utils::BuildFilenameFromProcessName(L"_dumped_before_write.bin");
 
-                if (Utils::SaveToFile(SaveName.c_str(), hollow))
+                if (Utils::SaveToFile(SaveName.c_str(), hollow, FALSE))
                 {
                     PipeLogger::LogInfo(L"NtWriteVirtualMemory: -- Saved as %s! --", SaveName.c_str());
                 }
@@ -155,7 +155,7 @@ NTSTATUS WINAPI Unhollow::hkNtResumeThread(HANDLE ThreadHandle, PULONG SuspendCo
             PipeLogger::LogInfo(L"NtResumeThread -- Dumped hollow of %d bytes --", Hollow->Size);
             std::wstring saveName = Utils::BuildFilenameFromProcessName(L"_dumped.bin");
 
-            if (Utils::SaveToFile(saveName.c_str(), Hollow))
+            if (Utils::SaveToFile(saveName.c_str(), Hollow, FALSE))
                 PipeLogger::LogInfo(L"NtResumeThread -- Saved PE as %s --", saveName.c_str());
             else
                 PipeLogger::LogInfo(L"NtResumeThread -- Unable to save PE file! --");
