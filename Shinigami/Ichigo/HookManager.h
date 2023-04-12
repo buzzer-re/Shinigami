@@ -37,12 +37,12 @@ class HookManager
 {
 public:
     HookManager();
-    LPVOID AddHook(_In_ BYTE* Src, _In_ BYTE* Dst);
+    LPVOID AddHook(_In_ BYTE* Src, _In_ BYTE* Dst,_In_ BOOL IgnoreProt);
     VOID DisassambleAt(_In_ ULONG_PTR* Address, _In_ SIZE_T NumberOfInstructions);
 
 private:
-    Hook* Hook64(_In_ BYTE* Src, _In_ BYTE* Dst);
-    Hook* Hook32(_In_ BYTE* Src, _In_ BYTE* Dst);
+    Hook* Hook64(_In_ BYTE* Src, _In_ BYTE* Dst, _In_ BOOL IgnoreProt);
+    Hook* Hook32(_In_ BYTE* Src, _In_ BYTE* Dst, _In_ BOOL IgnoreProt);
 private:
     ZydisDecoder ZDecoder;
     std::unordered_map<LPVOID, std::vector<Hook*>> HookChain;

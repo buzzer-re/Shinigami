@@ -32,6 +32,14 @@ namespace GenericUnpacker
         PULONG    NumberOfBytesWritten
     );
 
+    static NTSTATUS WINAPI hkNtProtectVirtualMemory (
+        HANDLE ProcessHandle,
+        PVOID* BaseAddress,
+        PSIZE_T RegionSize,
+        ULONG NewProtect,
+        PULONG OldProtect
+    );  
+
     static class Unpacker
     {
     public:
@@ -50,6 +58,10 @@ namespace GenericUnpacker
     LONG WINAPI VEHandler(EXCEPTION_POINTERS* pExceptionPointers);
 
     VOID RemoveGuard(ULONG_PTR Address);
+
+    static BOOL Ready;
+    // Used for toggle on/off when the unpacker inject in itself 
+    static std::unordered_map<ULONG_PTR, BOOL> IgnoreMap;
 
 }
 

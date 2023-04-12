@@ -1,14 +1,24 @@
 #include "pch.h"
 #include "Unpacker.h"
 
+#ifdef _WIN64
+#define XIP Rip
+#else
+#define XIP Eip
+#endif
 
 NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect)
 {
+    if (!GenericUnpacker::Ready)
+        return GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
+
     SIZE_T AllocatedSize = *RegionSize;
     BOOL Track = FALSE;
-    if (Protect == PAGE_EXECUTE_READWRITE || (Protect & PAGE_EXECUTE) == PAGE_EXECUTE)
+    BOOL AddAfter = *BaseAddress == 0;
+
+    if (Protect == PAGE_EXECUTE_READWRITE || Protect == PAGE_EXECUTE_READ || (Protect & PAGE_EXECUTE) == PAGE_EXECUTE)
     {
-        PipeLogger::LogInfo(L"Added the PAGE_GUARD bit at 0x%llx", *BaseAddress);
+        PipeLogger::LogInfo(L"Added the PAGE_GUARD bit at 0x%lx", *BaseAddress);
         Protect |= PAGE_GUARD;
         Track = TRUE;
     }
@@ -23,8 +33,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
         memory.End      = reinterpret_cast<ULONG_PTR>(memory.Addr + AllocatedSize);
         memory.Size     = AllocatedSize;
         memory.prot     = Protect;
-        PipeLogger::LogInfo(L"Tracking memory at 0x%llx with protections 0x%x", *BaseAddress, Protect);
-        PipeLogger::LogInfo(L"Look at 0x%llx", GenericUnpacker::hkNtAllocateVirtualMemory);
+        PipeLogger::LogInfo(L"Tracking memory at 0x%lx with protections 0x%x", *BaseAddress, Protect);
     }
 
     return status;
@@ -35,6 +44,9 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
 //
 NTSTATUS WINAPI GenericUnpacker::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToWrite, PULONG NumberOfBytesWritten)
 {
+    if (!GenericUnpacker::Ready)
+        return GenericUnpacker::cUnpacker.Win32Pointers.NtWriteVirtualMemory(ProcessHandle, BaseAddress, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten);
+
     MEMORY_BASIC_INFORMATION mbi;
     VirtualQuery(BaseAddress, &mbi, NumberOfBytesToWrite);
     DWORD OldProtection = mbi.Protect;
@@ -42,7 +54,9 @@ NTSTATUS WINAPI GenericUnpacker::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PV
     if ((mbi.Protect & PAGE_GUARD) == PAGE_GUARD && GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR) BaseAddress))
     {
         // Remove the PAGE_GUARD bit
+        IgnoreMap[(ULONG_PTR) BaseAddress] = TRUE;
         VirtualProtect(BaseAddress, NumberOfBytesToWrite, mbi.Protect & ~PAGE_GUARD, &OldProtection);
+        IgnoreMap.erase((ULONG_PTR)BaseAddress);
     }
 
     NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtWriteVirtualMemory(ProcessHandle, BaseAddress, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten);
@@ -51,30 +65,69 @@ NTSTATUS WINAPI GenericUnpacker::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PV
     return status;
 }
 
+NTSTATUS WINAPI GenericUnpacker::hkNtProtectVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG NewProtect, PULONG OldProtect)
+{
+    if (!GenericUnpacker::Ready || IgnoreMap.find((ULONG_PTR) *BaseAddress) != IgnoreMap.end())
+        return GenericUnpacker::cUnpacker.Win32Pointers.NtProtectVirtualMemory(ProcessHandle, BaseAddress, RegionSize, NewProtect, OldProtect);
+
+    // Detect if it will change to a executable memory
+    BOOL Track = FALSE;
+    if (NewProtect == PAGE_EXECUTE_READWRITE || NewProtect == PAGE_EXECUTE_READ || (NewProtect & PAGE_EXECUTE) == PAGE_EXECUTE)
+    {
+        // Add the PAGE_GUARD bit as well
+        NewProtect |= PAGE_GUARD;
+        Track = TRUE;
+    }
+
+    NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtProtectVirtualMemory(ProcessHandle, BaseAddress, RegionSize, NewProtect, OldProtect);
+
+    if (!NT_ERROR(status) && Track)
+    {
+        // Check if we already monitor this memory
+        Memory* mem = GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)*BaseAddress);
+
+        if (mem == nullptr)
+        {
+            // Monitor this address as well
+            GenericUnpacker::cUnpacker.Watcher.push_back({});
+            Memory& memory = GenericUnpacker::cUnpacker.Watcher.back();
+            memory.Addr = reinterpret_cast<uint8_t*>(*BaseAddress);
+            memory.End = reinterpret_cast<ULONG_PTR>(memory.Addr + *RegionSize);
+            memory.Size = *RegionSize;
+            memory.prot = NewProtect;
+            PipeLogger::LogInfo(L"VirtualProtect: Tracking memory at 0x%lx with protections 0x%x", *BaseAddress, NewProtect);
+        }
+    }
+
+    return status;
+}
+
 
 // Thanks a lot Hoang Bui -> https://medium.com/@fsx30/vectored-exception-handling-hooking-via-forced-exception-f888754549c6 
 LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
 {
+    if (!GenericUnpacker::Ready)
+        return EXCEPTION_CONTINUE_SEARCH;
+
     DWORD dwOldProt;
     MEMORY_BASIC_INFORMATION mbi;
     PEXCEPTION_RECORD ExceptionRecord = pExceptionPointers->ExceptionRecord;
-
     switch (ExceptionRecord->ExceptionCode)
     {
     case STATUS_GUARD_PAGE_VIOLATION:
         //
         // Verify if it's being monitored and executing
         //
-        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)ExceptionRecord->ExceptionAddress) && 
-            GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->Rip))
+        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)ExceptionRecord->ExceptionAddress) &&
+            GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
-            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%llx, starting dumping...", ExceptionRecord->ExceptionAddress);
-            ULONG_PTR StartAddress = (ULONG_PTR)pExceptionPointers->ContextRecord->Rip;
+            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%lx, starting dumping...", ExceptionRecord->ExceptionAddress);
+            ULONG_PTR StartAddress = (ULONG_PTR)pExceptionPointers->ContextRecord->XIP;
             Memory* Mem = GenericUnpacker::cUnpacker.IsBeingMonitored(StartAddress);
             GenericUnpacker::RemoveGuard((ULONG_PTR) Mem->Addr);
             if (GenericUnpacker::cUnpacker.Dump(Mem))
             {
-                PipeLogger::LogInfo(L"Saved stage %d as %s", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
+                PipeLogger::LogInfo(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
                 GenericUnpacker::cUnpacker.RemoveMonitor(Mem);
             }
             // TODO: Check user arguments if we should continue here
@@ -118,21 +171,24 @@ BOOL InitUnpackerHooks(HookManager& hkManager)
         return FALSE;
 
 	BYTE* NtAllocateVirtualMemoryPointer = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtAllocateVirtualMemory"));
-    BYTE* NtWriteVirtualMemoryPointer = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
-
-
-    //
-    // Register the VEH handler
-    //
-    AddVectoredExceptionHandler(true, (PVECTORED_EXCEPTION_HANDLER)GenericUnpacker::VEHandler);
+    BYTE* NtWriteVirtualMemoryPointer    = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
+    BYTE* NtProtectVirtualMemoryPointer  = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtProtectVirtualMemory"));
 
     //
     // Here we might trigger the HookChain, so we need to be very carefully with the operations on this hook
     // Since it will be from an already hooked function
     //
-    GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory = reinterpret_cast<NtAllocateVirtualMemory*>(hkManager.AddHook(NtAllocateVirtualMemoryPointer, (BYTE*)GenericUnpacker::hkNtAllocateVirtualMemory));
-    GenericUnpacker::cUnpacker.Win32Pointers.NtWriteVirtualMemory = reinterpret_cast<NtWriteVirtualMemory*>(hkManager.AddHook(NtWriteVirtualMemoryPointer, (BYTE*)GenericUnpacker::hkNtWriteVirtualMemory));
+    GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory = reinterpret_cast<NtAllocateVirtualMemory*>(hkManager.AddHook(NtAllocateVirtualMemoryPointer, (BYTE*)GenericUnpacker::hkNtAllocateVirtualMemory, FALSE));
+    GenericUnpacker::cUnpacker.Win32Pointers.NtWriteVirtualMemory = reinterpret_cast<NtWriteVirtualMemory*>(hkManager.AddHook(NtWriteVirtualMemoryPointer, (BYTE*)GenericUnpacker::hkNtWriteVirtualMemory, FALSE));
+    GenericUnpacker::cUnpacker.Win32Pointers.NtProtectVirtualMemory = reinterpret_cast<NtProtectVirtualMemory*>(hkManager.AddHook(NtProtectVirtualMemoryPointer, (BYTE*)GenericUnpacker::hkNtProtectVirtualMemory, TRUE));
     
+    //
+    // Register the VEH handler
+    //
+    AddVectoredExceptionHandler(true, (PVECTORED_EXCEPTION_HANDLER)GenericUnpacker::VEHandler);
+
+    PipeLogger::LogInfo(L"Unpacker: -- Hooked functions and added the VEH callback --");
+    GenericUnpacker::Ready = TRUE;
 
     return TRUE;
 }
