@@ -3,6 +3,8 @@
 
 typedef ULONG_PTR NTSTATUS;
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#define NT_ERROR(Status) ((((ULONG)(Status)) >> 30) == 3)
+#define STATUS_SUCCESS 0
 
 typedef struct _UNICODE_STRING {
     USHORT Length;
