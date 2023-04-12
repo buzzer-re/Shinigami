@@ -169,10 +169,19 @@ typedef NTSTATUS (WINAPI NtCreateUserProcess)
     PPS_ATTRIBUTE_LIST AttributeList
 );
 
+typedef NTSTATUS (WINAPI NtProtectVirtualMemory) (
+    HANDLE ProcessHandle,
+    PVOID* BaseAddress,
+    PSIZE_T RegionSize,
+    ULONG NewProtect,
+    PULONG OldProtect
+);
+
 
 struct WinAPIPointers {
     NtAllocateVirtualMemory* NtAllocateVirtualMemory;
     NtWriteVirtualMemory* NtWriteVirtualMemory;
     NtCreateUserProcess* NtCreateUserProcess;
     NtResumeThread* NtResumeThread;
+    NtProtectVirtualMemory* NtProtectVirtualMemory;
 };

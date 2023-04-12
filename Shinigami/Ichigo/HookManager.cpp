@@ -15,7 +15,8 @@ HookManager::HookManager()
 LPVOID
 HookManager::AddHook(
     _In_ BYTE* Src,
-    _In_ BYTE* Dst
+    _In_ BYTE* Dst,
+    _In_ BOOL IgnoreProt
 )
 {
     Hook* NewHook;
@@ -28,17 +29,17 @@ HookManager::AddHook(
     // Add new hook in the hook chain, so that way all the hooks are called recursively 
     //
 #if defined(_WIN64)
-        NewHook = Hook64((BYTE*) LastHook->GatewayAddr, Dst);
+        NewHook = Hook64((BYTE*) LastHook->GatewayAddr, Dst, IgnoreProt);
 #else
-        NewHook = Hook32((BYTE*)LastHook->GatewayAddr, Dst);
+        NewHook = Hook32((BYTE*)LastHook->GatewayAddr, Dst, IgnoreProt);
 #endif
     }
     else 
     {
 #if defined(_WIN64)
-        NewHook = Hook64(Src, Dst);
+        NewHook = Hook64(Src, Dst, IgnoreProt);
 #else
-        NewHook = Hook32(Src, Dst);
+        NewHook = Hook32(Src, Dst, IgnoreProt);
 #endif
     }
     //
@@ -78,7 +79,7 @@ VOID HookManager::DisassambleAt(_In_ ULONG_PTR* Address, _In_ SIZE_T NumberOfIns
 }
 
 Hook*
-HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
+HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst, _In_ BOOL IgnoreProt)
 {
     //
     // This is the base template trampoline code that will be used in future operations. 
@@ -167,7 +168,9 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     *(ULONG_PTR*)(JumpToHookCode + 2) = (ULONG_PTR)Dst;
 
     memcpy_s(Src, X64_TRAMPOLINE_SIZE, JumpToHookCode, X64_TRAMPOLINE_SIZE);
-    VirtualProtect(Src, X64_TRAMPOLINE_SIZE, dwOldProtect, &dwOldProtect);
+    
+    if (!IgnoreProt)
+        VirtualProtect(Src, X64_TRAMPOLINE_SIZE, dwOldProtect, &dwOldProtect);
 
     HookStructure                    = new Hook;
     HookStructure->HookAddr          = Dst;
@@ -181,7 +184,8 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
 Hook*
 HookManager::Hook32(
     _In_ BYTE* Src,
-    _In_ BYTE* Dst
+    _In_ BYTE* Dst,
+    _In_ BOOL IgnoreProt
 )
 {
     ULONG_PTR dwOldCodeDelta;
@@ -262,7 +266,7 @@ HookManager::Hook32(
     //
     // Recover old protections
     //
-    if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection))
+    if (!IgnoreProt && !VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection))
     {
         std::printf("Error on replacing protection!\n");
         VirtualFree(pOldCode, NULL, MEM_RELEASE);
