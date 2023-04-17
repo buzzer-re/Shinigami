@@ -139,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Ichigo.h" />
     <ClInclude Include="defs.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="HookManager.h" />
