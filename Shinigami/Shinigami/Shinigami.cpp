@@ -2,12 +2,18 @@
 #include <windows.h>
 #include <tchar.h>
 #include <Shlwapi.h>
+#include <vector>
+#include <string>
 
 #include "Injector.h"
+#include "argparse.h"
+#include "ShinigamiArguments.h"
+#include "EncodingUtils.h"
 
 #pragma comment(lib, "Shlwapi.lib")
 
 #define DLL_NAME L".\\Ichigo.dll"
+#define PROG_NAME "Shinigami"
 
 
 int PrintError()
@@ -30,29 +36,24 @@ int PrintError()
 }
 
 
-int _tmain(int argc, TCHAR** argv)
+int main(int argc, char** argv)
 {
-    std::wstring Target;
-    if (argc < 2)
+    ShinigamiArguments Arguments;
+
+    try
     {
-        std::wprintf(L"Usage: %s \"<executable> <executable_args>\"\n", PathFindFileNameW(argv[0]));
+        Arguments.ParseArguments(argc, argv, PROG_NAME);
+    }
+    catch (const std::runtime_error& error)
+    {
+        std::cerr << "Exception\n" << std::endl;
+        std::cerr << error.what() << std::endl;
         return EXIT_FAILURE;
     }
 
-    Target = argv[1];
-
-    if (argc > 2)
-    {
-        // Well, it could only has used "prog.exe args" between quotes, right ?
-        for (int i = 2; i < argc; ++i)
-        {
-            Target += L" " + std::wstring(argv[i]);
-        }
-    } 
-
-    Injector injector(Target);
+    Injector injector(Arguments.GetTarget());
     
-    if (!injector.InjectSuspended(DLL_NAME))
+    if (!injector.InjectSuspended(DLL_NAME, Arguments.GetIchigoArguments()))
         return PrintError();
     
     return EXIT_SUCCESS;
