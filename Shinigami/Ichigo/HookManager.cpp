@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "HookManager.h"
 #include <iostream>
+#include "Logger.h"
 
 HookManager::HookManager()
 {

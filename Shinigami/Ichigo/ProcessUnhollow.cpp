@@ -44,7 +44,7 @@ NTSTATUS WINAPI Unhollow::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID Bas
 {
     DWORD MonitoredPID = Unhollow::ProcessInformation.pi.dwProcessId;//Unhollow::ProcessInformation.pi.dwProcessId;
 
-    if (GetProcessId(ProcessHandle) == MonitoredPID &&
+    if (IchigoOptions->Unhollow.StopAtWrite && GetProcessId(ProcessHandle) == MonitoredPID &&
         NumberOfBytesToWrite >= sizeof(PIMAGE_DOS_HEADER) + sizeof(PIMAGE_NT_HEADERS))
     {
         PIMAGE_DOS_HEADER pDOSHdr = (PIMAGE_DOS_HEADER)Buffer;
@@ -59,14 +59,15 @@ NTSTATUS WINAPI Unhollow::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID Bas
                 // if the PE has a realocation table
                 // In this scenario is good to continue, since the resume one will already be fixed
                 PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", hollow->Size);
-                std::wstring SaveName = Utils::BuildFilenameFromProcessName(L"_dumped_before_write.bin");
-
+                std::wstring FileName = Utils::BuildFilenameFromProcessName(L"_dumped_before_write.bin");
+                std::wstring SaveName = Utils::PathJoin(IchigoOptions->WorkDirectory, FileName);
+               
                 if (Utils::SaveToFile(SaveName.c_str(), hollow, FALSE))
                 {
-                    PipeLogger::LogInfo(L"NtWriteVirtualMemory: -- Saved as %s! --", SaveName.c_str());
+                    PipeLogger::Log(L"NtWriteVirtualMemory: -- Saved as %s! --", SaveName.c_str());
                 }
                 else {
-                    PipeLogger::LogInfo(L"NtWriteVirtualMemory: -- Error saving file: %d --", GetLastError());
+                    PipeLogger::Log(L"NtWriteVirtualMemory: -- Error saving file: %d --", GetLastError());
                 }
 
                 delete hollow;
@@ -78,7 +79,7 @@ NTSTATUS WINAPI Unhollow::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID Bas
     }
 
     NTSTATUS success = Unhollow::ProcessInformation.Win32Pointers.NtWriteVirtualMemory(ProcessHandle, BaseAddress, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten);
-
+    
     if (!NT_SUCCESS(success))
     {
         PipeLogger::LogInfo(L"NtWriteVirtualMemory -- Error on writing process memory: %d --", GetLastError());
@@ -121,7 +122,7 @@ NTSTATUS WINAPI Unhollow::hkNtCreateUserProcess(
     );
 
     // Check if the process was successfully created and is suspended
-    if (NT_SUCCESS(status) && (ProcessFlags & CREATE_SUSPENDED) == CREATE_SUSPENDED) {
+    if (NT_SUCCESS(status) && (ProcessFlags & CREATE_SUSPENDED)) {
         // Copy the process information to the global ProcessInformation object
         Unhollow::ProcessInformation.DumptAtResume  = TRUE;
         Unhollow::ProcessInformation.pi.dwProcessId = GetProcessId(*ProcessHandle);
@@ -153,10 +154,11 @@ NTSTATUS WINAPI Unhollow::hkNtResumeThread(HANDLE ThreadHandle, PULONG SuspendCo
         if (Hollow)
         {
             PipeLogger::LogInfo(L"NtResumeThread -- Dumped hollow of %d bytes --", Hollow->Size);
-            std::wstring saveName = Utils::BuildFilenameFromProcessName(L"_dumped.bin");
+            std::wstring FileName = Utils::BuildFilenameFromProcessName(L"_dumped.bin");
+            std::wstring SaveName = Utils::PathJoin(IchigoOptions->WorkDirectory, FileName);
 
-            if (Utils::SaveToFile(saveName.c_str(), Hollow, FALSE))
-                PipeLogger::LogInfo(L"NtResumeThread -- Saved PE as %s --", saveName.c_str());
+            if (Utils::SaveToFile(SaveName.c_str(), Hollow, FALSE))
+                PipeLogger::LogInfo(L"NtResumeThread -- Saved PE as %s --", SaveName.c_str());
             else
                 PipeLogger::LogInfo(L"NtResumeThread -- Unable to save PE file! --");
 
@@ -201,13 +203,15 @@ Memory* Unhollow::HuntPE()
 //
 // Hook every NT function related to the Process Hollowing technique
 //
-BOOL InitUnhollowHooks(HookManager& hkManager)
+BOOL Unhollow::InitUnhollowHooks(HookManager& hkManager, Ichigo::Arguments& Options)
 {
     HMODULE NTDLL = GetModuleHandleA("NTDLL.DLL");
     if (NTDLL == NULL)
         return FALSE;
 
+    Unhollow::IchigoOptions = &Options;
     Unhollow::ProcessInformation.NTDLL = NTDLL;
+
     BYTE* NtResumeThreadPointer                                         = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtResumeThread"));
     BYTE* NtAllocateVirtualMemoryPointer                                = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtAllocateVirtualMemory"));
     BYTE* NtWriteVirtualMemoryPointer                                   = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
@@ -219,11 +223,12 @@ BOOL InitUnhollowHooks(HookManager& hkManager)
     Unhollow::ProcessInformation.Win32Pointers.NtResumeThread           = (NtResumeThread*)hkManager.AddHook(NtResumeThreadPointer, (BYTE*)Unhollow::hkNtResumeThread, FALSE);
     
     PipeLogger::LogInfo(L"Unhollow: -- Hooked Process Unhollow functions --");
+
     return TRUE;
 }
 
 
-VOID Shutdown()
+VOID Unhollow::Shutdown()
 {
     for (auto& addr : Unhollow::ProcessInformation.Watcher)
     {

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "PEDumper.h"
+#include "Logger.h"
 
 Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem)
 {
@@ -58,6 +59,30 @@ Memory* PEDumper::DumpPE(ULONG_PTR* Address)
     
     return mem;
 }
+
+
+PIMAGE_DOS_HEADER PEDumper::FindPE(Memory* Mem)
+{
+    PIMAGE_DOS_HEADER pDosHeader;
+    PIMAGE_NT_HEADERS pNtHeader;
+
+    for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End; Curr++)
+    {
+        pDosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Curr);
+        if (pDosHeader->e_magic == IMAGE_DOS_SIGNATURE)
+        {
+            pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR)pDosHeader + pDosHeader->e_lfanew);
+            if ((ULONG_PTR)pNtHeader <= Mem->End - sizeof(pNtHeader) && 
+                pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+            {
+                return pDosHeader;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 
 SIZE_T PEDumper::GetPESize(PIMAGE_NT_HEADERS pNTHeader)
 {

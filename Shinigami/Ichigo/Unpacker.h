@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <windows.h>
 
+#include "Ichigo.h"
 #include "HookManager.h"
 #include "Logger.h"
 #include "Mem.h"
@@ -46,7 +47,7 @@ namespace GenericUnpacker
         Memory* IsBeingMonitored(ULONG_PTR Address);
         BOOL Dump(Memory* StartAddress);
         VOID RemoveMonitor(Memory* Mem);
-
+        VOID CleanMonitor();
 
     public:
         WinAPIPointers Win32Pointers;
@@ -57,14 +58,17 @@ namespace GenericUnpacker
 
     LONG WINAPI VEHandler(EXCEPTION_POINTERS* pExceptionPointers);
 
+    BOOL InitUnpackerHooks(HookManager& hkManager, Ichigo::Arguments& Arguments);
+
     VOID RemoveGuard(ULONG_PTR Address);
+    VOID Shutdown();
 
     static BOOL Ready;
     // Used for toggle on/off when the unpacker inject in itself 
     static std::unordered_map<ULONG_PTR, BOOL> IgnoreMap;
 
+    static Ichigo::Arguments* IchigoOptions;
 }
 
 
-BOOL InitUnpackerHooks(HookManager& hkManager);
 

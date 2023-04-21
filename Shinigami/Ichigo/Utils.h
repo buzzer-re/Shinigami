@@ -15,6 +15,7 @@ namespace Utils
 {
 	BOOL SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate);
 	SIZE_T GetPESize(PIMAGE_NT_HEADERS pDOSHeader);
+	std::wstring PathJoin(const std::wstring& BasePath, const std::wstring& FileName);
 	
 	std::wstring BuildFilenameFromProcessName(const wchar_t* suffix);
 

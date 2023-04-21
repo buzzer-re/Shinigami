@@ -12,7 +12,7 @@
 #include "defs.h"
 #include "Utils.h"
 #include "Logger.h"
-
+#include "Ichigo.h"
 //
 // Unhollow namespace containing the Information struct which holds the hooks and system pointers
 //
@@ -65,9 +65,14 @@ namespace Unhollow
     );
 
     Memory* HuntPE();
+
+
+    // Place our hooks
+    BOOL InitUnhollowHooks(HookManager& hkManager, Ichigo::Arguments& Options);
+    // Clean
+    VOID Shutdown();
+
+    // Hold the current config state
+    static Ichigo::Arguments* IchigoOptions;
 }
 
-// Place our hooks
-BOOL InitUnhollowHooks(HookManager& hkManager);
-// Clean
-VOID Shutdown();

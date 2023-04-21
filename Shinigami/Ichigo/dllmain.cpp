@@ -12,6 +12,7 @@
 #define DLL_EXPORT __declspec(dllexport)
 
 
+
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
@@ -20,7 +21,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        if (!PipeLogger::InitPipe())
+        if (!PipeLogger::InitPipe(Ichigo::Options))
         {
             MessageBoxA(NULL, "Unable to initialize log pipes! Exiting for safety...", MESSAGEBOX_ERROR_TITLE, ERR_ICON);
             ExitProcess(1);
@@ -31,29 +32,40 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
+        GenericUnpacker::Shutdown();
+        Unhollow::Shutdown();
         PipeLogger::LogInfo(L"Exiting...");
         PipeLogger::ClosePipe();
-        Shutdown();
+
         break;
     }
     return TRUE;
 }
 
-
 extern "C"
 {
     DLL_EXPORT void SetIchigoArguments(Ichigo::Arguments* args)
     {
-        Ichigo::Options = args;
-        PipeLogger::LogInfo(L"Setting arguments\nOutput path => %s ...\n", Ichigo::Options->WorkDirectory);
+        // Maybe we should copy it ? think about if this DLL somehow is injected in a different manner
+        wmemcpy_s(Ichigo::Options.WorkDirectory, MAX_PATH, args->WorkDirectory, MAX_PATH);
+        Ichigo::Options.Unhollow.StopAtWrite = args->Unhollow.StopAtWrite;
+        Ichigo::Options.Quiet                = args->Quiet;
+
+        PipeLogger::LogInfo(L"Loaded user aguments");
     }
 
-    DLL_EXPORT void InitIchigo()
+    DLL_EXPORT void StartIchigo()
     {
-        if (!InitUnhollowHooks(Ichigo::hkManager) || !InitUnpackerHooks(Ichigo::hkManager))
+
+        if (!Unhollow::InitUnhollowHooks(Ichigo::hkManager, Ichigo::Options) || !GenericUnpacker::InitUnpackerHooks(Ichigo::hkManager, Ichigo::Options))
         {
             MessageBoxA(NULL, "Unable to place the needed hooks! Exiting for safety...", MESSAGEBOX_ERROR_TITLE, ERR_ICON);
             ExitProcess(1);
         }
+
+        Unhollow::IchigoOptions = &Ichigo::Options;
+        GenericUnpacker::IchigoOptions = &Ichigo::Options;
+        PipeLogger::LogInfo(L"Work directory:  address 0x%p\n", Ichigo::Options);
+
     }
 }
