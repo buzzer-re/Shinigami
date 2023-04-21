@@ -3,6 +3,8 @@
 
 typedef ULONG_PTR NTSTATUS;
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#define NT_ERROR(Status) ((((ULONG)(Status)) >> 30) == 3)
+#define STATUS_SUCCESS 0
 
 typedef struct _UNICODE_STRING {
     USHORT Length;
@@ -167,3 +169,19 @@ typedef NTSTATUS (WINAPI NtCreateUserProcess)
     PPS_ATTRIBUTE_LIST AttributeList
 );
 
+typedef NTSTATUS (WINAPI NtProtectVirtualMemory) (
+    HANDLE ProcessHandle,
+    PVOID* BaseAddress,
+    PSIZE_T RegionSize,
+    ULONG NewProtect,
+    PULONG OldProtect
+);
+
+
+struct WinAPIPointers {
+    NtAllocateVirtualMemory* NtAllocateVirtualMemory;
+    NtWriteVirtualMemory* NtWriteVirtualMemory;
+    NtCreateUserProcess* NtCreateUserProcess;
+    NtResumeThread* NtResumeThread;
+    NtProtectVirtualMemory* NtProtectVirtualMemory;
+};

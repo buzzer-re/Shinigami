@@ -4,8 +4,13 @@
 
 using namespace PipeLogger;
 
-BOOL 
-PipeLogger::InitPipe()
+VOID PipeLogger::BeQuiet(BOOL quiet)
+{
+	Quiet = quiet;
+}
+
+BOOL
+PipeLogger::InitPipe(Ichigo::Arguments& Options)
 {
 	hPipe = CreateFile(
 		PIPE_NAME,
@@ -16,6 +21,7 @@ PipeLogger::InitPipe()
 		0,
 		NULL
 	);
+
 	return TRUE;
 }
 
@@ -30,7 +36,6 @@ VOID PipeLogger::ClosePipe()
 	if (hPipe != INVALID_HANDLE_VALUE)
 		CloseHandle(hPipe);
 }
-
 
 //
 // Write the message into the pipe
@@ -51,23 +56,44 @@ PipeLogger::WriteToPipe(const LogMsg& logMsg)
 }
 
 
+BOOL
+PipeLogger::Log(const wchar_t* message, ...)
+{
+	va_list args;
+	
+	va_start(args, message);
+	BOOL status = SendMsg(USER_LOG, message, args);
+	va_end(args);
+
+	return status;
+}
 
 BOOL 
 PipeLogger::LogInfo(const wchar_t* message, ...)
 {
-	LogMsg logMsg;
-	logMsg.MessageType = INFO_LOG;
-	ZeroMemory(logMsg.message, MAX_MESSAGE_SIZE);
-	
-	size_t msgLen = wcslen(message);
+	if (Quiet)
+		return TRUE;
 
 	va_list args;
+
 	va_start(args, message);
-
-	vswprintf(logMsg.message, MAX_MESSAGE_SIZE, message, args);
-
+	BOOL status = SendMsg(USER_LOG, message, args);
 	va_end(args);
 
+	return status;
+}
+
+BOOL
+PipeLogger::SendMsg(Messages level, const wchar_t* message, va_list args)
+{
+	LogMsg logMsg;
+	logMsg.MessageType = level;
+
+	ZeroMemory(logMsg.message, MAX_MESSAGE_SIZE);
+	size_t msgLen = wcslen(message);
+
+	vswprintf(logMsg.message, MAX_MESSAGE_SIZE, message, args);
 	return WriteToPipe(logMsg);
 }
+
 

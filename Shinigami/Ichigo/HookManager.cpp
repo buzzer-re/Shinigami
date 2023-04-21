@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "HookManager.h"
 #include <iostream>
+#include "Logger.h"
 
 HookManager::HookManager()
 {
@@ -11,33 +12,51 @@ HookManager::HookManager()
 #endif
 }
 
+
 LPVOID
 HookManager::AddHook(
     _In_ BYTE* Src,
-    _In_ BYTE* Dst
+    _In_ BYTE* Dst,
+    _In_ BOOL IgnoreProt
 )
 {
-    auto it = hooks.find(Src);
-    if (it != hooks.end()) return nullptr;
-    LPVOID pGatewayAddr;
+    Hook* NewHook;
+    auto it = HookChain.find(Src);
 
+    if (it != HookChain.end())
+    {
+        Hook* LastHook = it->second.back();
+    //
+    // Add new hook in the hook chain, so that way all the hooks are called recursively 
+    //
 #if defined(_WIN64)
-    pGatewayAddr = Hook64(Src, Dst);
+        NewHook = Hook64((BYTE*) LastHook->GatewayAddr, Dst, IgnoreProt);
 #else
-    pGatewayAddr = Hook32(Src, Dst);
+        NewHook = Hook32((BYTE*)LastHook->GatewayAddr, Dst, IgnoreProt);
 #endif
+    }
+    else 
+    {
+#if defined(_WIN64)
+        NewHook = Hook64(Src, Dst, IgnoreProt);
+#else
+        NewHook = Hook32(Src, Dst, IgnoreProt);
+#endif
+    }
+    //
+    // Sad, we failed ;-;
+    //
+    if (NewHook == nullptr)
+        return nullptr;
+
     // 
     // Insert new hook on the manager map
     //
-    Hook hk;
-    hk.OriginalAddr = Src;
-    hk.HookAddr = Dst;
-    hk.GatewayAddr = pGatewayAddr;
+    HookChain[Src].push_back(NewHook);
 
-    hooks[Src] = hk;
-
-    return pGatewayAddr;
+    return NewHook->GatewayAddr;
 }
+
 
 VOID HookManager::DisassambleAt(_In_ ULONG_PTR* Address, _In_ SIZE_T NumberOfInstructions)
 {
@@ -60,8 +79,8 @@ VOID HookManager::DisassambleAt(_In_ ULONG_PTR* Address, _In_ SIZE_T NumberOfIns
     }
 }
 
-LPVOID
-HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
+Hook*
+HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst, _In_ BOOL IgnoreProt)
 {
     //
     // This is the base template trampoline code that will be used in future operations. 
@@ -99,6 +118,11 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     ZydisDecodedInstruction inst;
 
     //
+    // Hook structure to store core information about this hook 
+    //
+    Hook* HookStructure;
+
+    //
     // Disassemble to pick the instructions length 
     //
     while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&ZDecoder, pSrc, X64_TRAMPOLINE_SIZE, &inst)) && overlap < X64_TRAMPOLINE_SIZE)
@@ -119,14 +143,15 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     // Store the original code, nop everything and build the trampoline code to jump back
     //
     VirtualProtect(Src, overlap, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+
+    // 
+    // Add a NOP slide to give a good space to the HookChain structure
+    //
+    memset(pOldCode, NOP, NOP_SLIDE);
     //
     // Copy the exactly instructions that should be executed, extracted by Zydis
     //
-    memcpy_s(pOldCode, overlap + X64_TRAMPOLINE_SIZE + NOP_SLIDE, Src, overlap);
-    // 
-    // Add a NOP slide to avoid that the trampoline code mess up with some opcode
-    //
-    memset(pOldCode + overlap, NOP, NOP_SLIDE);
+    memcpy_s(pOldCode + NOP_SLIDE, overlap + X64_TRAMPOLINE_SIZE, Src, overlap);
     //
     // Nop Src to avoid execute invalid instructions
     //
@@ -144,15 +169,24 @@ HookManager::Hook64(_In_ BYTE* Src, _In_ BYTE* Dst)
     *(ULONG_PTR*)(JumpToHookCode + 2) = (ULONG_PTR)Dst;
 
     memcpy_s(Src, X64_TRAMPOLINE_SIZE, JumpToHookCode, X64_TRAMPOLINE_SIZE);
-    VirtualProtect(Src, X64_TRAMPOLINE_SIZE, dwOldProtect, &dwOldProtect);
+    
+    if (!IgnoreProt)
+        VirtualProtect(Src, X64_TRAMPOLINE_SIZE, dwOldProtect, &dwOldProtect);
 
-    return pOldCode;
+    HookStructure                    = new Hook;
+    HookStructure->HookAddr          = Dst;
+    HookStructure->OriginalAddr      = Src;
+    HookStructure->GatewayAddr       = pOldCode;
+    HookStructure->NumInstLeftToExec = overlap;
+    
+    return HookStructure;
 }
 
-LPVOID
+Hook*
 HookManager::Hook32(
     _In_ BYTE* Src,
-    _In_ BYTE* Dst
+    _In_ BYTE* Dst,
+    _In_ BOOL IgnoreProt
 )
 {
     ULONG_PTR dwOldCodeDelta;
@@ -161,6 +195,7 @@ HookManager::Hook32(
     DWORD dwOldProtection;
     DWORD overlap = 0;
     BYTE* pSrc = Src;
+    Hook* HookStructure;
 
     ZydisDecodedInstruction inst;
 
@@ -192,6 +227,7 @@ HookManager::Hook32(
         VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection);
         return nullptr;
     }
+
     // 
     // Copy the old code before overwrite
     //
@@ -231,12 +267,21 @@ HookManager::Hook32(
     //
     // Recover old protections
     //
-    if (!VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection))
+    if (!IgnoreProt && !VirtualProtect(Src, X86_TRAMPOLINE_SIZE, dwOldProtection, &dwOldProtection))
     {
         std::printf("Error on replacing protection!\n");
         VirtualFree(pOldCode, NULL, MEM_RELEASE);
         return nullptr;
     }
 
-    return (LPVOID)pOldCode;
+    HookStructure                       = new Hook;
+    HookStructure->Gateway32Delta       = dwRelativeAddrDstDelta;
+    HookStructure->Trampoline32Delta    = dwOldCodeDelta;
+    HookStructure->HookAddr             = Dst;
+    HookStructure->OriginalAddr         = Src;
+    HookStructure->GatewayAddr          = pOldCode;
+    HookStructure->NumInstLeftToExec    = overlap;
+
+    
+    return HookStructure;
 }

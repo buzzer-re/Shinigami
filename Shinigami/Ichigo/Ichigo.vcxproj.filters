@@ -42,6 +42,12 @@
     <ClInclude Include="Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Unpacker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Ichigo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -63,6 +69,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Unpacker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
