@@ -82,9 +82,10 @@ BOOL Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
     SIZE_T BytesWritten;
 
     ZeroMemory(&th, sizeof(th));
-    th.LoadLibraryW = LoadLibraryW;
-    th.GetProcAddress = GetProcAddress;
-    
+    th.LoadLibraryW     = LoadLibraryW;
+    th.GetProcAddress   = GetProcAddress;
+
+    printf("PID - %d\n", pi.dwProcessId);
     //
     // Exported DLL functions to be called inside the injected code
     //
@@ -93,6 +94,8 @@ BOOL Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
 
     RtlCopyMemory(&th.Arguments, &DLLArguments, sizeof(th.Arguments));
     wmemcpy_s(th.DllName, MAX_PATH, DLLName.c_str(), DLLName.size() + 1);
+    th.Arguments.PID = pi.dwProcessId;
+
     
     LPVOID pThreadData = VirtualAllocEx(pi.hProcess, NULL, sizeof(th), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (pThreadData == nullptr) return FALSE;

@@ -4,7 +4,12 @@
 
 using namespace PipeLogger;
 
-BOOL 
+VOID PipeLogger::BeQuiet(BOOL quiet)
+{
+	Quiet = quiet;
+}
+
+BOOL
 PipeLogger::InitPipe(Ichigo::Arguments& Options)
 {
 	hPipe = CreateFile(
@@ -16,6 +21,7 @@ PipeLogger::InitPipe(Ichigo::Arguments& Options)
 		0,
 		NULL
 	);
+
 	return TRUE;
 }
 
@@ -82,17 +88,12 @@ PipeLogger::SendMsg(Messages level, const wchar_t* message, va_list args)
 {
 	LogMsg logMsg;
 	logMsg.MessageType = level;
-	ZeroMemory(logMsg.message, MAX_MESSAGE_SIZE);
 
+	ZeroMemory(logMsg.message, MAX_MESSAGE_SIZE);
 	size_t msgLen = wcslen(message);
 
-
 	vswprintf(logMsg.message, MAX_MESSAGE_SIZE, message, args);
-
-
 	return WriteToPipe(logMsg);
-
-
 }
 
 
