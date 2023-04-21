@@ -37,6 +37,16 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 }
 
 
+// Quick and dirty implementation
+std::wstring Utils::PathJoin(const std::wstring& BasePath, const std::wstring& FileName)
+{
+    if (BasePath.back() == '\\')
+        return BasePath + FileName;
+
+    return BasePath + L'\\' + FileName;
+}
+
+
 
 std::wstring Utils::BuildFilenameFromProcessName(const wchar_t* suffix)
 {

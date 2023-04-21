@@ -66,17 +66,15 @@ VOID PipeLogger::LoggerThread(ULONG_PTR* params)
 			switch (msg->MessageType)
 			{
 				case EXITING: break;
+				case USER_LOG:
 				case INFO_LOG:
 					Logger::LogInfo(msg->message);
 					break;
 			}
 		}
 	}
-
 	
-	Logger::LogInfo(L"Closing thread..");
 	delete[] Data;
-	return VOID();
 }
 
 VOID Logger::LogInfo(const wchar_t* message, ...)

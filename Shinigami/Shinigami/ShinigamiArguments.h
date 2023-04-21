@@ -6,11 +6,17 @@
 #include <vector>
 #include <windows.h>
 
-
+#pragma pack(push, 1)
 struct IchigoArguments
 {
     wchar_t WorkDirectory[MAX_PATH];
+    BOOL Quiet;
+    struct
+    {
+        BOOL StopAtWrite;
+    } Unhollow;
 };
+#pragma pack(pop)
 
 class ShinigamiArguments {
 public:
