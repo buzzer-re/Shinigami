@@ -12,7 +12,7 @@
 #include "defs.h"
 #include "Utils.h"
 #include "Logger.h"
-
+#include "Ichigo.h"
 //
 // Unhollow namespace containing the Information struct which holds the hooks and system pointers
 //
@@ -20,19 +20,11 @@ namespace Unhollow
 {
     static struct Information
     {
-        HookManager hkManager;
         HMODULE NTDLL;
         BOOL DumptAtResume;
         PROCESS_INFORMATION pi;
         std::vector<Memory*> Watcher;
-
-        struct {
-            NtAllocateVirtualMemory*    NtAllocateVirtualMemory;
-            NtWriteVirtualMemory*       NtWriteVirtualMemory;
-            NtCreateUserProcess*        NtCreateUserProcess;
-            NtResumeThread*             NtResumeThread;
-        } Win32Pointers;
-
+        WinAPIPointers Win32Pointers;
     } ProcessInformation;
 
     static NTSTATUS WINAPI hkNtAllocateVirtualMemory(
@@ -73,9 +65,14 @@ namespace Unhollow
     );
 
     Memory* HuntPE();
+
+
+    // Place our hooks
+    BOOL InitUnhollowHooks(HookManager& hkManager, Ichigo::Arguments& Options);
+    // Clean
+    VOID Shutdown();
+
+    // Hold the current config state
+    static Ichigo::Arguments* IchigoOptions;
 }
 
-// Place our hooks
-BOOL InitHooks();
-// Clean
-VOID Shutdown();

@@ -2,20 +2,48 @@
 #include "Utils.h"
 #include "Logger.h"
 
-BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data)
+BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 {
-    HANDLE hFile = CreateFileW(filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
+    HANDLE hFile = CreateFileW(filename, FILE_APPEND_DATA, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    BOOL success = TRUE;
+    
     if (hFile == INVALID_HANDLE_VALUE) {
         return false;
     }
 
-    DWORD bytesWritten;
-    bool success = WriteFile(hFile, data->Addr, data->Size, &bytesWritten, NULL) && (bytesWritten == data->Size);
+    DWORD BytesWritten = 0;
 
+    if (Paginate)
+    {
+        // Write based on the VirtualQuery output
+        MEMORY_BASIC_INFORMATION mbi;
+        DWORD Written = 0;
+        while (Written < data->Size)
+        {
+            VirtualQuery(data->Addr + Written, &mbi, sizeof(mbi));
+            WriteFile(hFile, data->Addr + Written, mbi.RegionSize, &BytesWritten, NULL);
+            Written += BytesWritten;
+        }
+    }
+    else
+    {
+        success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
+    }
+
+    
     CloseHandle(hFile);
 
     return success;
+}
+
+
+// Quick and dirty implementation
+std::wstring Utils::PathJoin(const std::wstring& BasePath, const std::wstring& FileName)
+{
+    if (BasePath.back() == '\\')
+        return BasePath + FileName;
+
+    return BasePath + L'\\' + FileName;
 }
 
 

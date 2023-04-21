@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "PEDumper.h"
+#include "Logger.h"
 
 Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem)
 {
@@ -12,7 +13,7 @@ Memory* PEDumper::FindRemotePE(HANDLE hProcess, const Memory* mem)
 
     if (dosHdr.e_magic != IMAGE_DOS_SIGNATURE)
     {
-        // TODO: Deep search, implement
+        // ScanPEHeaders((ULONG_PTR) dosHdr);
         return nullptr;
     }
 
@@ -59,6 +60,30 @@ Memory* PEDumper::DumpPE(ULONG_PTR* Address)
     return mem;
 }
 
+
+PIMAGE_DOS_HEADER PEDumper::FindPE(Memory* Mem)
+{
+    PIMAGE_DOS_HEADER pDosHeader;
+    PIMAGE_NT_HEADERS pNtHeader;
+
+    for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End; Curr++)
+    {
+        pDosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Curr);
+        if (pDosHeader->e_magic == IMAGE_DOS_SIGNATURE)
+        {
+            pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR)pDosHeader + pDosHeader->e_lfanew);
+            if ((ULONG_PTR)pNtHeader <= Mem->End - sizeof(pNtHeader) && 
+                pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+            {
+                return pDosHeader;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+
 SIZE_T PEDumper::GetPESize(PIMAGE_NT_HEADERS pNTHeader)
 {
     // Get the first section header
@@ -81,7 +106,16 @@ SIZE_T PEDumper::GetPESize(PIMAGE_NT_HEADERS pNTHeader)
     return rawSize;
 }
 
+std::wstring AsciiToWide(const std::string& strAscii)
+{
+    int nLen = static_cast<int>(strAscii.length());
+    int nWideLen = MultiByteToWideChar(CP_ACP, 0, strAscii.c_str(), nLen, nullptr, 0);
+    std::wstring strWide(nWideLen, L'\0');
+    MultiByteToWideChar(CP_ACP, 0, strAscii.c_str(), nLen, &strWide[0], nWideLen);
+    return strWide;
+}
 
+#include "Logger.h"
 //
 // Fix in memory PE file to match the section information address in disk
 //
@@ -117,6 +151,7 @@ VOID PEDumper::FixPESections(Memory* mem)
 
         // Restore the section header's original protection
         VirtualProtect(sectionHeaders, sizeof(IMAGE_SECTION_HEADER), dwOldProtection, &dwOldProtection);
+
     }
 }
 

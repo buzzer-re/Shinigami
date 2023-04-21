@@ -9,6 +9,7 @@
 enum Messages
 {
 	INFO_LOG,
+	USER_LOG,
 	ERROR_LOG,
 	INPUT_LOG,
 	LOG_SUCCESS,
