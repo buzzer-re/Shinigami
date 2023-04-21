@@ -8,7 +8,8 @@ ShinigamiArguments::ShinigamiArguments()
     WorkDirectory = cwd;
 }
 
-void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* ProgamName) {
+void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* ProgamName) 
+{
     argparse::ArgumentParser parser(ProgamName);
     parser.add_argument("program_name")
         .help("Name of the program to execute");
@@ -20,8 +21,12 @@ void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* Prog
         .help("Unhollow: Stop the execution when the PE file is being to be written");
     parser.add_argument("--verbose")
         .implicit_value(true)
-        .default_value(true)
+        .default_value(false)
         .help("Display a verbose output");
+    parser.add_argument("--only-executables", "-p")
+        .implicit_value(true)
+        .default_value(false)
+        .help("Only extract PE artefacts");
 
     try {
         parser.parse_args(argc, argv);
@@ -38,6 +43,7 @@ void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* Prog
 
     
     wcsncpy_s(IchiArguments.WorkDirectory, MAX_PATH, WorkDirectory.c_str(), _TRUNCATE);
-    IchiArguments.Unhollow.StopAtWrite = parser.get<bool>("--stop-at-write");
-    IchiArguments.Quiet = !parser.get<bool>("--verbose");
+    IchiArguments.Unhollow.StopAtWrite  = parser.get<bool>("--stop-at-write");
+    IchiArguments.Quiet                 = !parser.get<bool>("--verbose");
+    IchiArguments.OnlyPE                = parser.get<bool>("--only-executables");
 }

@@ -17,6 +17,8 @@ namespace Ichigo
     {
         wchar_t WorkDirectory[MAX_PATH];
         BOOL Quiet;
+        BOOL OnlyPE;
+        DWORD PID;
         struct
         {
             BOOL StopAtWrite;

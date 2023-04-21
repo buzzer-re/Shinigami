@@ -15,10 +15,9 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
     SIZE_T AllocatedSize = *RegionSize;
     BOOL Track = FALSE;
     BOOL AddAfter = *BaseAddress == 0;
-
-    if (Protect == PAGE_EXECUTE_READWRITE || Protect == PAGE_EXECUTE_READ || Protect & PAGE_EXECUTE)
+    
+    if ((ProcessHandle == NULL || GetProcessId(ProcessHandle) == GenericUnpacker::IchigoOptions->PID) && (Protect == PAGE_EXECUTE_READWRITE || Protect == PAGE_EXECUTE_READ || Protect & PAGE_EXECUTE))
     {
-        PipeLogger::LogInfo(L"Added the PAGE_GUARD bit at 0x%lx", *BaseAddress);
         Protect |= PAGE_GUARD;
         Track = TRUE;
     }
@@ -33,7 +32,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
         memory.End      = reinterpret_cast<ULONG_PTR>(memory.Addr + AllocatedSize);
         memory.Size     = AllocatedSize;
         memory.prot     = Protect;
-        PipeLogger::LogInfo(L"Tracking memory at 0x%lx with protections 0x%x", *BaseAddress, Protect);
+        PipeLogger::LogInfo(L"Tracking newly allocated memory 0x%lx with protections 0x%x", *BaseAddress, Protect);
     }
 
     return status;
@@ -41,6 +40,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
 
 //
 // Toggle on/off the PAGE_GUARD bit to avoid memory write errors, as we are more concerning about code execution than writing
+// This only exists in the case when for some reason the loader write in itself using OpenProcess + WriteProcessMemory
 //
 NTSTATUS WINAPI GenericUnpacker::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToWrite, PULONG NumberOfBytesWritten)
 {
@@ -51,7 +51,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PV
     VirtualQuery(BaseAddress, &mbi, NumberOfBytesToWrite);
     DWORD OldProtection = mbi.Protect;
 
-    if ((mbi.Protect & PAGE_GUARD) && GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR) BaseAddress))
+    if ((ProcessHandle == NULL || GetProcessId(ProcessHandle) == GenericUnpacker::IchigoOptions->PID) && (mbi.Protect & PAGE_GUARD) && GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR) BaseAddress))
     {
         // Remove the PAGE_GUARD bit
         IgnoreMap[(ULONG_PTR) BaseAddress] = TRUE;
@@ -76,12 +76,12 @@ NTSTATUS WINAPI GenericUnpacker::hkNtProtectVirtualMemory(HANDLE ProcessHandle, 
     {
         auto IgnoreIter = IgnoreMap.find((ULONG_PTR)*BaseAddress);
         if (IgnoreIter != IgnoreMap.end() && IgnoreIter->second)
-            goto ignore;
+            goto ignore;            
     }
 
     // Detect if it will change to a executable memory
     BOOL Track = FALSE;
-    if (NewProtect == PAGE_EXECUTE_READWRITE || NewProtect == PAGE_EXECUTE_READ || (NewProtect & PAGE_EXECUTE))
+    if ((ProcessHandle == NULL || GetProcessId(ProcessHandle) == GenericUnpacker::IchigoOptions->PID) && (NewProtect == PAGE_EXECUTE_READWRITE || NewProtect == PAGE_EXECUTE_READ || (NewProtect & PAGE_EXECUTE)))
     {
         // Add the PAGE_GUARD bit as well
         NewProtect |= PAGE_GUARD;
@@ -121,6 +121,8 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
     DWORD dwOldProt;
     MEMORY_BASIC_INFORMATION mbi;
     PEXCEPTION_RECORD ExceptionRecord = pExceptionPointers->ExceptionRecord;
+    //PipeLogger::Log(L"Exception at 0x%x code %lx\n", ExceptionRecord->ExceptionAddress, ExceptionRecord->ExceptionCode);
+
     switch (ExceptionRecord->ExceptionCode)
     {
     case STATUS_GUARD_PAGE_VIOLATION:
@@ -136,7 +138,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
 
             if (GenericUnpacker::cUnpacker.Dump(Mem))
             {
-                PipeLogger::LogInfo(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
+                PipeLogger::Log(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
                 GenericUnpacker::cUnpacker.RemoveMonitor(Mem);
             }
             // TODO: Check user arguments if we should continue here
@@ -146,13 +148,13 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
     
     case STATUS_SINGLE_STEP:
         // Add the PAGE_GUARD again
-        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)ExceptionRecord->ExceptionAddress))
+        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)ExceptionRecord->ExceptionAddress) &&
+            GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
             VirtualQuery(ExceptionRecord->ExceptionAddress, &mbi, 0x1000);
             mbi.Protect |= PAGE_GUARD;
             VirtualProtect(ExceptionRecord->ExceptionAddress, 0x1000, mbi.Protect, &dwOldProt);
         }
-
         return EXCEPTION_CONTINUE_EXECUTION;
     }
 
@@ -244,15 +246,21 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
   
             PeMem.Addr = reinterpret_cast<uint8_t*>(pDosHeader);
             PeMem.Size = PEDumper::GetPESize(pNtHeaders);
-            PipeLogger::LogInfo(L"PE has %d bytes\n", PeMem.Size);
             PeMem.End  = reinterpret_cast<ULONG_PTR>(PeMem.Size + PeMem.Addr);
             if (Utils::SaveToFile(SaveName.c_str(), &PeMem, FALSE))
             {
-                PipeLogger::LogInfo(L"Found a possible PE image inside the shellcode area, saved as %s!", SaveName.c_str());
+                PipeLogger::Log(L"Found a embeded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
+                if (Ichigo::Options.OnlyPE)
+                {
+                    StagesPath.push_back(SaveName);
+                    return TRUE;
+                }
             }
         }
     }
     
+    if (Ichigo::Options.OnlyPE) return FALSE;
+
     std::wstring FileName = Utils::BuildFilenameFromProcessName(suffix.c_str());
     std::wstring SaveName = Utils::PathJoin(GenericUnpacker::IchigoOptions->WorkDirectory, FileName);
 

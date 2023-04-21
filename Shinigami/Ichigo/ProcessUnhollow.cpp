@@ -158,15 +158,15 @@ NTSTATUS WINAPI Unhollow::hkNtResumeThread(HANDLE ThreadHandle, PULONG SuspendCo
             std::wstring SaveName = Utils::PathJoin(IchigoOptions->WorkDirectory, FileName);
 
             if (Utils::SaveToFile(SaveName.c_str(), Hollow, FALSE))
-                PipeLogger::LogInfo(L"NtResumeThread -- Saved PE as %s --", SaveName.c_str());
+                PipeLogger::Log(L"NtResumeThread -- Saved PE as %s --", SaveName.c_str());
             else
-                PipeLogger::LogInfo(L"NtResumeThread -- Unable to save PE file! --");
+                PipeLogger::Log(L"NtResumeThread -- Unable to save PE file! --");
 
             delete Hollow;
         }
         else
         {
-            PipeLogger::LogInfo(L"NtResumeThread -- Unable to dump, error code: %d. Exiting for safety --", GetLastError());
+            PipeLogger::Log(L"NtResumeThread -- Unable to dump, error code: %d. Exiting for safety --", GetLastError());
         }
         //
         // Kill hollowed process

@@ -50,8 +50,12 @@ extern "C"
         wmemcpy_s(Ichigo::Options.WorkDirectory, MAX_PATH, args->WorkDirectory, MAX_PATH);
         Ichigo::Options.Unhollow.StopAtWrite = args->Unhollow.StopAtWrite;
         Ichigo::Options.Quiet                = args->Quiet;
+        Ichigo::Options.OnlyPE               = args->OnlyPE;
+        Ichigo::Options.PID                  = args->PID;
 
+        PipeLogger::BeQuiet(args->Quiet);
         PipeLogger::LogInfo(L"Loaded user aguments");
+        
     }
 
     DLL_EXPORT void StartIchigo()
@@ -63,9 +67,6 @@ extern "C"
             ExitProcess(1);
         }
 
-        Unhollow::IchigoOptions = &Ichigo::Options;
-        GenericUnpacker::IchigoOptions = &Ichigo::Options;
-        PipeLogger::LogInfo(L"Work directory:  address 0x%p\n", Ichigo::Options);
-
+        PipeLogger::Log(L"Ichigo is ready!");
     }
 }
