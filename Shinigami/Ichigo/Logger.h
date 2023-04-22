@@ -32,7 +32,7 @@ namespace PipeLogger
 	static BOOL Quiet;
 
 	VOID BeQuiet(BOOL quiet);
-	BOOL InitPipe(Ichigo::Arguments& Options);
+	BOOL InitPipe();
 
 	BOOL Log(const wchar_t* message, ...);
 	BOOL LogInfo(const wchar_t* message, ...);

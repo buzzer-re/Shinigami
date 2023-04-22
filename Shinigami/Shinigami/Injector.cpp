@@ -10,7 +10,7 @@ VOID __stdcall LoadDLL(ULONG_PTR Params)
     
     if (!hModule)
     {
-        ThData->ExitProcess(1);
+        ThData->ExitProcess(ThData->GetLastError());
     }
     SetIchigoArguments SetArgsFunc = reinterpret_cast<SetIchigoArguments>(ThData->GetProcAddress(hModule, ThData->SetArgumentsFuncName));
     StartIchigo StartIchigoFunc = reinterpret_cast<StartIchigo>(ThData->GetProcAddress(hModule, ThData->StartIchigoFuncName));
@@ -60,11 +60,18 @@ BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const Ichi
     }
 
     Logger::LogInfo(L"Injection finished, waiting connection...");
-    PipeLogger::InitPipe();
+    if (!PipeLogger::InitPipe())
+    {
+        Logger::LogInfo(L"Unable to initialize log pipes! Error: %d\n", GetLastError());
+        TerminateProcess(pi.hProcess, 0);
+        goto quit;
+    }
 
-    
     ResumeThread(pi.hThread);
     WaitForSingleObject(pi.hThread, INFINITE);
+    DWORD ExitCode;
+    GetExitCodeProcess(pi.hProcess, &ExitCode);
+    Logger::LogInfo(L"Child process exited with code %d, closing...", ExitCode);
 
 quit:
     CloseHandle(pi.hThread);
@@ -82,10 +89,12 @@ BOOL Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
     SIZE_T BytesWritten;
 
     ZeroMemory(&th, sizeof(th));
+    // Maybe it's better to handle this function differently in the future
     th.LoadLibraryW     = LoadLibraryW;
     th.GetProcAddress   = GetProcAddress;
+    th.ExitProcess      = ExitProcess;
+    th.GetLastError     = GetLastError;
 
-    printf("PID - %d\n", pi.dwProcessId);
     //
     // Exported DLL functions to be called inside the injected code
     //
@@ -93,7 +102,7 @@ BOOL Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
     memcpy_s(th.StartIchigoFuncName, MAX_PATH, START_ICHIGO_FUNC_NAME, sizeof(START_ICHIGO_FUNC_NAME));
 
     RtlCopyMemory(&th.Arguments, &DLLArguments, sizeof(th.Arguments));
-    wmemcpy_s(th.DllName, MAX_PATH, DLLName.c_str(), DLLName.size() + 1);
+    wmemcpy_s(th.DllName, MAX_PATH, DLLName.c_str(), DLLName.size());
     th.Arguments.PID = pi.dwProcessId;
 
     

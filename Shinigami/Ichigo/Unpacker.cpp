@@ -249,7 +249,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
             PeMem.End  = reinterpret_cast<ULONG_PTR>(PeMem.Size + PeMem.Addr);
             if (Utils::SaveToFile(SaveName.c_str(), &PeMem, FALSE))
             {
-                PipeLogger::Log(L"Found a embeded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
+                PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
                 if (Ichigo::Options.OnlyPE)
                 {
                     StagesPath.push_back(SaveName);
