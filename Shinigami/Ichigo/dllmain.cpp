@@ -21,12 +21,11 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        if (!PipeLogger::InitPipe(Ichigo::Options))
+        if (!PipeLogger::InitPipe())
         {
             MessageBoxA(NULL, "Unable to initialize log pipes! Exiting for safety...", MESSAGEBOX_ERROR_TITLE, ERR_ICON);
             ExitProcess(1);
         }
-
         PipeLogger::LogInfo(L"Starting " DLL_NAME "..");
         break;
     case DLL_THREAD_ATTACH:
@@ -61,7 +60,7 @@ extern "C"
     DLL_EXPORT void StartIchigo()
     {
 
-        if (!Unhollow::InitUnhollowHooks(Ichigo::hkManager, Ichigo::Options) || !GenericUnpacker::InitUnpackerHooks(Ichigo::hkManager, Ichigo::Options))
+        if (!Unhollow::InitUnhollowHooks(Ichigo::hkManager, Ichigo::Options)  || !GenericUnpacker::InitUnpackerHooks(Ichigo::hkManager, Ichigo::Options))
         {
             MessageBoxA(NULL, "Unable to place the needed hooks! Exiting for safety...", MESSAGEBOX_ERROR_TITLE, ERR_ICON);
             ExitProcess(1);

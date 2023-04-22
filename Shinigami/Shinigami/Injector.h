@@ -15,18 +15,20 @@
 typedef void (*SetIchigoArguments)(const IchigoArguments*);
 typedef void (*StartIchigo)();
 
+#pragma pack(push, 1)
 struct ThreadData {
 	decltype(LoadLibraryW)	  *LoadLibraryW;
 	decltype(GetProcAddress)  *GetProcAddress;
 	decltype(ExitProcess)	  *ExitProcess;
+	decltype(GetLastError)	  *GetLastError;
 
 	wchar_t DllName[MAX_PATH];
-
 
 	char SetArgumentsFuncName[MAX_PATH];
 	char StartIchigoFuncName[MAX_PATH];
 	IchigoArguments Arguments;
 };
+#pragma pack(pop)
 
 
 class Injector
