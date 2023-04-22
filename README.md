@@ -8,7 +8,6 @@
 
 
 Shinigami is an experimental tool designed to detect and unpack malware implants that are injected via process hollowing or generic packer routines. The tool operates by hooking NT functions related to Process Hollowing and marking newly executable memory pages with the page guard bit. This technique allows Shinigami to detect indirect flow changes, typically caused by shellcode or unpacked code, which are often indicative of malware.
-
 Shinigami creates the target executable in a suspended state and injects a DLL library called "Ichigo". This library automatically hooks every necessary function to detect and extract the implant. Once the artefact is fully extracted, the tool will kill the process.
 
 Shinigami effectiveness may vary depending on the specific malware it is targeting. However, it is a valuable addition to any malware analysis toolkit and may prove useful in detecting and analyzing malware that uses process hollowing or generic packer routines.
@@ -22,7 +21,6 @@ Shinigami effectiveness may vary depending on the specific malware it is targeti
 ## Process Hollowing
   
 Shinigami's core method for extracting implants injected using process hollowing involves hooking two NT functions: NtResumeThread and NtWriteVirtualMemory. Here's how it works:
-
   - `NtResumeThread` Hook
     - Shinigami hunts through all the previously allocated memory via NtAllocateVirtualMemory to check if it contains the DOS header signature. If found, it extracts the remote PE file, patches it to have the sections aligned, and saves it on disk with the format ***filename_dumped.bin***.
     
