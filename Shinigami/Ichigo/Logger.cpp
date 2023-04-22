@@ -10,7 +10,7 @@ VOID PipeLogger::BeQuiet(BOOL quiet)
 }
 
 BOOL
-PipeLogger::InitPipe(Ichigo::Arguments& Options)
+PipeLogger::InitPipe()
 {
 	hPipe = CreateFile(
 		PIPE_NAME,

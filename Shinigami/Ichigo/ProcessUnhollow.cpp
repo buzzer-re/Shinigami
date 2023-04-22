@@ -7,8 +7,8 @@
 NTSTATUS WINAPI Unhollow::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect)
 {
     NTSTATUS status = ProcessInformation.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
-   
     DWORD ProcessPID = GetProcessId(ProcessHandle);
+
     if (ProcessPID == Unhollow::ProcessInformation.pi.dwProcessId && NT_SUCCESS(status))
     {
         if (BaseAddress == nullptr)
@@ -55,9 +55,6 @@ NTSTATUS WINAPI Unhollow::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID Bas
             Memory* hollow = PEDumper::DumpPE((ULONG_PTR*)Buffer);
             if (hollow)
             {
-                // TODO: Add a INPUT option here to continue or not, because i've seem some loaders that fix the ImageBase field with the reloc delta before write the process
-                // if the PE has a realocation table
-                // In this scenario is good to continue, since the resume one will already be fixed
                 PipeLogger::LogInfo(L"Extracted implant of %d bytes before it been written, saving!", hollow->Size);
                 std::wstring FileName = Utils::BuildFilenameFromProcessName(L"_dumped_before_write.bin");
                 std::wstring SaveName = Utils::PathJoin(IchigoOptions->WorkDirectory, FileName);
