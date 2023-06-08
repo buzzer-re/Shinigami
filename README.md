@@ -66,6 +66,9 @@ Some important options are:
 
 ***--verbose***: Displays a verbose output. This can be useful for debugging or understanding the inner workings of Shinigami.
 
+## DLL Support
+
+Currently, Shinigami does not load DLL executables within its context. However, this feature is under development. In the meantime, you can utilize this handy [tool](https://github.com/buzzer-re/dll2exe) that I have built to convert DLL to EXE files, allowing you to select the desired exported function as entrypoint (if needed). In a future release, this tool's functionality will be available natively within Shinigami.
 
 ### Example usage:
 ## Unhollow
