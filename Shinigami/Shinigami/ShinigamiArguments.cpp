@@ -27,6 +27,8 @@ void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* Prog
         .implicit_value(true)
         .default_value(false)
         .help("Only extract PE artefacts");
+    parser.add_argument("--exported", "-e")
+        .help("Exported Function: Choose a exported function to execute if the target is a DLL (rundll will be used)");
 
     try {
         parser.parse_args(argc, argv);
@@ -40,8 +42,9 @@ void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* Prog
     if (parser.is_used("--output"))
         WorkDirectory = EncodingUtils::StringToWstring(parser.get<std::string>("--output"));
 
+    if (parser.is_used("--exported"))
+        ExportedFunction = EncodingUtils::StringToWstring(parser.get<std::string>("--exported"));
 
-    
     wcsncpy_s(IchiArguments.WorkDirectory, MAX_PATH, WorkDirectory.c_str(), _TRUNCATE);
     IchiArguments.Unhollow.StopAtWrite  = parser.get<bool>("--stop-at-write");
     IchiArguments.Quiet                 = !parser.get<bool>("--verbose");

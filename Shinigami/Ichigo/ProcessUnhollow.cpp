@@ -8,7 +8,6 @@ NTSTATUS WINAPI Unhollow::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID*
 {
     NTSTATUS status = ProcessInformation.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
     DWORD ProcessPID = GetProcessId(ProcessHandle);
-
     if (ProcessPID == Unhollow::ProcessInformation.pi.dwProcessId && NT_SUCCESS(status))
     {
         if (BaseAddress == nullptr)
@@ -19,6 +18,7 @@ NTSTATUS WINAPI Unhollow::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID*
         //
         // Search if we already have this entry
         //
+
         auto& Watcher = Unhollow::ProcessInformation.Watcher;
         auto it = std::find_if(Watcher.begin(), Watcher.end(), [BaseAddress](Memory* mem) { return mem->Addr == (uint8_t*) BaseAddress; });
         if (it == Watcher.end())

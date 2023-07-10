@@ -9,6 +9,7 @@
 #include "argparse.h"
 #include "ShinigamiArguments.h"
 #include "EncodingUtils.h"
+#include "SimplePE.h"
 
 #pragma comment(lib, "Shlwapi.lib")
 
@@ -51,9 +52,18 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    const std::wstring& Target = Arguments.GetTarget();
+    SimplePE PE(Target);
+
+    if (PE.IsValid())
+    {
+        std::cerr << "Is not a PE file\n";
+        return EXIT_FAILURE;
+    }
+
     Injector injector(Arguments.GetTarget());
     
-    if (!injector.InjectSuspended(DLL_NAME, Arguments.GetIchigoArguments()))
+    if (!injector.InjectSuspended(DLL_NAME, Arguments.GetIchigoArguments(), PE.IsDLL(), Arguments.ExportedFunction))
         return PrintError();
     
     return EXIT_SUCCESS;

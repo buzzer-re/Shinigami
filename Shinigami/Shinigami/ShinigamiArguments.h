@@ -31,15 +31,16 @@ public:
 
     void ParseArguments(int argc, char* argv[], const char* ProgramName);
 
-private:
+public:
     // Shinigami specific arguments for process creation and so on
     std::wstring TargetExecutableName;
     std::wstring WorkDirectory;
     std::wstring OutputDirectory;
+    std::wstring ExportedFunction;
     std::vector<std::wstring> TargetArguments;
 
     // Ichigo arguments that will be sent to the injected code
-
+private:
     IchigoArguments IchiArguments;
 
 };

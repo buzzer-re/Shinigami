@@ -136,6 +136,7 @@
     <ClCompile Include="PipeLogger.cpp" />
     <ClCompile Include="Shinigami.cpp" />
     <ClCompile Include="ShinigamiArguments.cpp" />
+    <ClCompile Include="SimplePE.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="argparse.h" />
@@ -143,6 +144,7 @@
     <ClInclude Include="Injector.h" />
     <ClInclude Include="PipeLogger.h" />
     <ClInclude Include="ShinigamiArguments.h" />
+    <ClInclude Include="SimplePE.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
