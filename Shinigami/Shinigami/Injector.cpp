@@ -42,6 +42,7 @@ BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const Ichi
     if (IsDLL)
     {
         ProcName = BuildRunDLLCommand(ProcName, ExportedFunction);
+        Logger::LogInfo(L"Target is a DLL, injecting into the rundll32 process!");
     }
 
     // Create process suspended

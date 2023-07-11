@@ -55,7 +55,7 @@ int main(int argc, char** argv)
     const std::wstring& Target = Arguments.GetTarget();
     SimplePE PE(Target);
 
-    if (PE.IsValid())
+    if (!PE.IsValid())
     {
         std::cerr << "Is not a PE file\n";
         return EXIT_FAILURE;

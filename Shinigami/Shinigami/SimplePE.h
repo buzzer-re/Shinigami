@@ -11,8 +11,10 @@ public:
 private:
 	BOOL Load();
 private:
-	PIMAGE_DOS_HEADER DosHdr;
+	IMAGE_DOS_HEADER DosHdr;
+	IMAGE_NT_HEADERS NtHeader;
 	BYTE* Buff;
 	BOOL Valid;
+	BOOL DLL;
 	std::wstring Path;
 };
