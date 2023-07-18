@@ -14,6 +14,9 @@
 #include "defs.h"
 #include "PEDumper.h"
 
+#define TF 0x100
+#define PAGE_SIZE 0x1000
+
 namespace GenericUnpacker
 {
     static NTSTATUS WINAPI hkNtAllocateVirtualMemory(

@@ -80,6 +80,26 @@ PIMAGE_DOS_HEADER PEDumper::FindPE(Memory* Mem)
         }
     }
 
+    // Search for detached headers
+    return PEDumper::HeuristicSearch(Mem);
+}
+
+PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
+{
+    PipeLogger::LogInfo(L"Starting Heuristic search at 0x%llx", Mem->Addr);
+
+   
+    // Search for NT headers
+    // If found, validated sections offset and if it has code
+
+    // We failed to search detached DOS headers
+    // Search for common sections names such: .text, .data, .rdata
+    // If found, walk back and try to rebuild the DOS headers and NT headers
+
+
+
+    // We failed, return nullptr
+
     return nullptr;
 }
 
