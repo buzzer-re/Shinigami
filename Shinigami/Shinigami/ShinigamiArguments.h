@@ -23,7 +23,7 @@ struct IchigoArguments
 class ShinigamiArguments {
 public:
     ShinigamiArguments();
-    const std::wstring& GetTarget() const { return TargetExecutableName; }
+    const std::wstring& GetTarget() const;
     const std::wstring& GetWorkDirectory() const { return WorkDirectory; }
     const std::vector<std::wstring>& GetTargetArgs() const { return TargetArguments; }
     const IchigoArguments& GetIchigoArguments() const { return IchiArguments; }

@@ -30,4 +30,27 @@ namespace EncodingUtils {
         return str;
     }
 
+    std::vector<std::wstring> SplitWide(std::wstring String, const std::wstring& delimiter)
+    {
+        std::vector<std::wstring> SplitedString;
+        std::wstring token;
+        size_t pos = 0;
+
+        if ((pos = String.find(delimiter) == std::wstring::npos))
+        {
+            SplitedString.push_back(String);
+            goto ret;
+        }
+
+        while ((pos = String.find(delimiter)) != std::wstring::npos)
+        {
+            token = String.substr(0, pos);
+            SplitedString.push_back(token);
+            String.erase(0, pos + delimiter.length());
+        }
+
+     ret:
+        return SplitedString;
+    }
+
 }

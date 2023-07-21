@@ -8,6 +8,13 @@ ShinigamiArguments::ShinigamiArguments()
     WorkDirectory = cwd;
 }
 
+const std::wstring& ShinigamiArguments::GetTarget() const
+{
+    // First verify if there is arguments here
+
+    return TargetArguments[0];
+}
+
 void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* ProgamName) 
 {
     argparse::ArgumentParser parser(ProgamName);
@@ -38,6 +45,7 @@ void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* Prog
     }
 
     TargetExecutableName = EncodingUtils::StringToWstring(parser.get<std::string>("program_name"));
+    TargetArguments      = EncodingUtils::SplitWide(TargetExecutableName, L" ");
 
     if (parser.is_used("--output"))
         WorkDirectory = EncodingUtils::StringToWstring(parser.get<std::string>("--output"));

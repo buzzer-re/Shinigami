@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    Injector injector(Arguments.GetTarget());
+    Injector injector(Arguments.TargetExecutableName);
     
     if (!injector.InjectSuspended(DLL_NAME, Arguments.GetIchigoArguments(), PE.IsDLL(), Arguments.ExportedFunction))
         return PrintError();

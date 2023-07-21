@@ -65,21 +65,26 @@ PIMAGE_DOS_HEADER PEDumper::FindPE(Memory* Mem)
 {
     PIMAGE_DOS_HEADER pDosHeader;
     PIMAGE_NT_HEADERS pNtHeader;
+    MEMORY_BASIC_INFORMATION mbi;
 
-    for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End; Curr++)
+    for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End - sizeof(IMAGE_DOS_HEADER); Curr++)
     {
         pDosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Curr);
+
         if (pDosHeader->e_magic == IMAGE_DOS_SIGNATURE)
         {
             pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR)pDosHeader + pDosHeader->e_lfanew);
-            if ((ULONG_PTR)pNtHeader <= Mem->End - sizeof(pNtHeader) && 
-                pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+
+            if ((ULONG_PTR)pNtHeader <= Mem->End)
             {
-                return pDosHeader;
+                if (!VirtualQuery((LPCVOID)pNtHeader, &mbi, 0x1000))
+                    continue;
+                
+                if (pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+                    return pDosHeader;
             }
         }
     }
-
     // Search for detached headers
     return PEDumper::HeuristicSearch(Mem);
 }

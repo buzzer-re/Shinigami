@@ -131,9 +131,10 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
         //
         // Verify if it's being monitored and executing
         //
-        GuardedAddress = ExceptionRecord->ExceptionInformation[1];
+        GuardedAddress = ExceptionRecord->ExceptionInformation[1]; 
         if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
+            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%lx, starting dumping...", ExceptionRecord->ExceptionAddress);
             ULONG_PTR StartAddress = (ULONG_PTR)pExceptionPointers->ContextRecord->XIP;
             Memory* Mem = GenericUnpacker::cUnpacker.IsBeingMonitored(StartAddress);
 
@@ -223,8 +224,9 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     if (Mem == nullptr) return FALSE;
     std::wstring suffix = L"_shellcode." + std::to_wstring(StagesPath.size() + 1) + L".bin";
     
-    PIMAGE_DOS_HEADER dosHeader= reinterpret_cast<PIMAGE_DOS_HEADER>(Mem->Addr);
+    PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Mem->Addr);
     PIMAGE_NT_HEADERS NTHeaders;
+
     if (dosHeader->e_magic == IMAGE_DOS_SIGNATURE)
     {
         // Check NT
@@ -239,7 +241,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     {   
         // Search a PE file within the region
         PIMAGE_DOS_HEADER pDosHeader = PEDumper::FindPE(Mem);
-        
+
         if (pDosHeader != nullptr)
         {
             // Found it, save as part of this stage as well
