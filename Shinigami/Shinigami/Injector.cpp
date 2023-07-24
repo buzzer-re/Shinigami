@@ -38,7 +38,8 @@ BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const Ichi
     ZeroMemory(&si, sizeof(si));
     ZeroMemory(&si, sizeof(pi));
     si.cb = sizeof(si);
-
+    std::wprintf(L"Executing %s\n", ProcName);
+    
     if (IsDLL)
     {
         ProcName = BuildRunDLLCommand(ProcName, ExportedFunction);

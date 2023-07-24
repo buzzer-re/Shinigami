@@ -40,7 +40,7 @@ int PrintError()
 int main(int argc, char** argv)
 {
     ShinigamiArguments Arguments;
-
+    
     try
     {
         Arguments.ParseArguments(argc, argv, PROG_NAME);
