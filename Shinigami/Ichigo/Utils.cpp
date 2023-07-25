@@ -11,16 +11,13 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
         return false;
     }
 
-    DWORD BytesWritten = 0;
+    DWORD BytesWritten;
     DWORD OldProt;
-    VirtualProtect(data->Addr, data->Size, PAGE_READWRITE, &OldProt);
-    success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
-    PipeLogger::Log(L"Written %d bytes of file that has %d bytes\n", BytesWritten, data->Size);
-    if (BytesWritten != data->Size)
-    {
-        PipeLogger::Log(L"Error: %d", GetLastError());
 
-    }
+    VirtualProtect(data->Addr, data->Size, PAGE_READWRITE, &OldProt);
+    
+    success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
+
     VirtualProtect(data->Addr, data->Size, OldProt, &OldProt);
 
     CloseHandle(hFile);
