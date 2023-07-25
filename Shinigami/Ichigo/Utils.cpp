@@ -4,7 +4,7 @@
 
 BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 {
-    HANDLE hFile = CreateFileW(filename, FILE_APPEND_DATA, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE hFile = CreateFileW(filename, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     BOOL success = TRUE;
     
     if (hFile == INVALID_HANDLE_VALUE) {
@@ -12,28 +12,20 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
     }
 
     DWORD BytesWritten = 0;
-
-    if (Paginate)
+    DWORD OldProt;
+    VirtualProtect(data->Addr, data->Size, PAGE_READWRITE, &OldProt);
+    success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
+    PipeLogger::Log(L"Written %d bytes of file that has %d bytes\n", BytesWritten, data->Size);
+    if (BytesWritten != data->Size)
     {
-        // Write based on the VirtualQuery output
-        MEMORY_BASIC_INFORMATION mbi;
-        DWORD Written = 0;
-        while (Written < data->Size)
-        {
-            VirtualQuery(data->Addr + Written, &mbi, sizeof(mbi));
-            WriteFile(hFile, data->Addr + Written, mbi.RegionSize, &BytesWritten, NULL);
-            Written += BytesWritten;
-        }
-    }
-    else
-    {
-        success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
-    }
+        PipeLogger::Log(L"Error: %d", GetLastError());
 
-    
+    }
+    VirtualProtect(data->Addr, data->Size, OldProt, &OldProt);
+
     CloseHandle(hFile);
 
-    return success;
+    return TRUE;
 }
 
 

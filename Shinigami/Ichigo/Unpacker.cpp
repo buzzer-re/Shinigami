@@ -137,6 +137,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
             ULONG_PTR StartAddress = (ULONG_PTR)pExceptionPointers->ContextRecord->XIP;
             Memory* Mem = GenericUnpacker::cUnpacker.IsBeingMonitored(StartAddress);
             Mem->IP = (ULONG_PTR) pExceptionPointers->ContextRecord->XIP;
+
             if (GenericUnpacker::cUnpacker.Dump(Mem))
             {
                 PipeLogger::Log(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
