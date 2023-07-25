@@ -242,7 +242,6 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     {   
         // Search a PE file within the region
         PIMAGE_DOS_HEADER pDosHeader = PEDumper::FindPE(Mem);
-
         if (pDosHeader != nullptr)
         {
             // Found it, save as part of this stage as well

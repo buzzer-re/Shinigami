@@ -7,30 +7,71 @@
 </figure>
 
 
-Shinigami is an experimental tool to detect and dump malware implants that are injected via process hollowing. It works by hooking common functions like CreateProcessInternal, WriteProcessMemory, and ResumeThread.
+Shinigami is an experimental tool designed to detect and unpack malware implants that are injected via process hollowing or generic packer routines. 
 
-It creates the target executable in a suspended state and injects a DLL library called "Ichigo," which will hook every needed function to detect and dump the implant. The library automatically kills the process once the hollow is extracted.
+# How this works
+The tool operates by hooking NT functions related to Process Hollowing and marking newly executable memory pages with the page guard bit. This technique allows Shinigami to detect indirect flow changes, typically caused by shellcode or unpacked code, which are often indicative of malware.
+Shinigami creates the target executable in a suspended state and injects a DLL library called "Ichigo". This library automatically hooks every necessary function to detect and extract the implant. Once the artefact is fully extracted, the tool will kill the process.
 
-***Shinigami is a dynamic unpacking tool, so you don't want to run this on your machine or in your static analysis lab***
+Shinigami effectiveness may vary depending on the specific malware it is targeting. However, it is a valuable addition to any malware analysis toolkit and may prove useful in detecting and analyzing malware that uses process hollowing or generic packer routines.
 
-***The current version only supports Process Hollowing, but I have plans to detect other kinds of unpacking mechanisms for a more general approach.***
+***Important: This is a dynamic unpacking tool and should not be run on your personal machine or in a static analysis lab***
 
 
 
-## Current detection methods
+# Current unpack methods
 
-- ResumeThread
-  - By hooking ResumeThread it will hunt inside all the previous allocated memory via `VirtualAllocEx` if contains the DOS header signature, if found the remote PE file will be extracted, patched to have the sections aligned  and saved in disk with the format ***\<executable\>_dumped.bin***.
+## Process Hollowing
   
-- WriteProcessMemory
-  - By hooking WriteProcessMemory it will detect if the executable is trying to write a PE file in the remote process, if so, it will hunt using the `lpBuffer` pointer and extract any PE files found in the executable itself (not the injected), this PE file saved as ***\<executable\>_before_written.bin***.
+Shinigami's core method for extracting implants injected using process hollowing involves hooking two NT functions: NtResumeThread and NtWriteVirtualMemory. Here's how it works:
+  - `NtResumeThread` Hook
+    - Shinigami hunts through all the previously allocated memory via NtAllocateVirtualMemory to check if it contains the DOS header signature. If found, it extracts the remote PE file, patches it to have the sections aligned, and saves it on disk with the format ***filename_dumped.bin***.
+    
+  - `NtWriteVirtualMemory` Hook
+    - Shinigami detects if the executable is trying to write a PE file in the remote process by hooking NtWriteVirtualMemory. If a PE file is found, it is extracted using the Buffer pointer and saved on disk as ***filename_before_written.bin***, this option is only used if the flag `--stop-at-write` is passed.
+
+## Generic unpacker
+Shinigami's generic unpacker module marks newly allocated memory areas with the PAGE_GUARD bit, it also applies this bit if any existing memory area has its protections replaced by something executable. By using guard pages, it can track which memory area is going to be used to allocate some shellcode or PE images.
+
+For each shellcode detected, Shinigami saves the raw shellcode itself on disk. It also scans that memory region to find any PE files and saves them as well. Shinigami treats every different shellcode execution as a new stage, so by the end, you will have your working directory with files called `filename_shellcode_STAGENUM.bin or .exe`.
 
 
+ 
 ## Usage
 
-Shinigami is easy to use as it's only supports process hollowing, so no fancy command line here. Simply run `shinigami.exe` with the executable you want to analyze as the first argument, followed by any arguments you want to pass to it.
+The tool has a couple of options:
+
+
+```bash
+Usage: Shinigami [--help] [--version] [--output VAR] [--stop-at-write] [--verbose] [--only-executables] program_name
+
+Positional arguments:
+  program_name                  Name of the program to execute
+
+Optional arguments:
+  -h, --help                    shows help message and exits
+  -v, --version                 prints version information and exits
+  -o, --output                  Directory to dump artefacts
+  --stop-at-write               Unhollow: Stop the execution when the PE file is being to be written
+  --verbose                     Display a verbose output
+  -p, --only-executables        Only extract PE artefacts
+
+```
+
+Some important options are:
+
+***-o, --output***: Specifies the directory to dump the extracted artifacts. By default, extracted artifacts will be saved to a directory called output in the current working directory. You can specify a different directory by passing its path as an argument.
+
+***--stop-at-write***: This argument is used during the unpacking of a hollowed process. When Shinigami detects that the PE file is being written to the hollowed process, it will stop the execution and save the extracted PE file. This option can be useful if you want to avoid executing the entire hollowed process and only need to extract the unpacked code.
+
+***--verbose***: Displays a verbose output. This can be useful for debugging or understanding the inner workings of Shinigami.
+
+## DLL Support
+
+Currently, Shinigami does not load DLL executables within its context. However, this feature is under development. In the meantime, you can utilize this handy [tool](https://github.com/buzzer-re/dll2exe) that I have built to convert DLL to EXE files, allowing you to select the desired exported function as entrypoint (if needed). In a future release, this tool's functionality will be available natively within Shinigami.
 
 ### Example usage:
+## Unhollow
 
 |![](assets/screenshots/test.png)|
 |:--:|
@@ -45,6 +86,13 @@ After the extraction is done, the process is killed and you will have (I hope so
 
 The detected implant will be dumped following the format described at [detection methods](#current-detection-methods) section
 
+## Unpacking
+
+|![](assets/screenshots/unpack_example.png)|
+|:--:|
+|Unpacking a random loader described [here](https://reversing.codes/posts/Manual-unpacking-in-details/)|
+
+In the example above, Shinigami automatically detected the behavior of a generic loader and extracted all the executed shellcodes and images within it, without requiring any specific switches to enable or disable the unpacking routine. This was possible because Shinigami shares some functions with the unhollow module, using shared hooks provided by the [Gancho](https://github.com/buzzer-re/gancho) library.
 
 ## Installing
 

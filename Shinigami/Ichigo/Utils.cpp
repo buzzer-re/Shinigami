@@ -20,9 +20,37 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 
     VirtualProtect(data->Addr, data->Size, OldProt, &OldProt);
 
+    if (Paginate)
+    {
+        // Write based on the VirtualQuery output
+        MEMORY_BASIC_INFORMATION mbi;
+        DWORD Written = 0;
+        while (Written < data->Size)
+        {
+            VirtualQuery(data->Addr + Written, &mbi, sizeof(mbi));
+            WriteFile(hFile, data->Addr + Written, mbi.RegionSize, &BytesWritten, NULL);
+            Written += BytesWritten;
+        }
+    }
+    else
+    {
+        success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
+    }
+
+    
     CloseHandle(hFile);
 
     return TRUE;
+}
+
+
+// Quick and dirty implementation
+std::wstring Utils::PathJoin(const std::wstring& BasePath, const std::wstring& FileName)
+{
+    if (BasePath.back() == '\\')
+        return BasePath + FileName;
+
+    return BasePath + L'\\' + FileName;
 }
 
 

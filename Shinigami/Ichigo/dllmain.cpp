@@ -47,7 +47,6 @@ extern "C"
     {
         // Maybe we should copy it ? think about if this DLL somehow is injected in a different manner
         wmemcpy_s(Ichigo::Options.WorkDirectory, MAX_PATH, args->WorkDirectory, MAX_PATH);
-
         Ichigo::Options.Unhollow.StopAtWrite = args->Unhollow.StopAtWrite;
         Ichigo::Options.Quiet                = args->Quiet;
         Ichigo::Options.OnlyPE               = args->OnlyPE;

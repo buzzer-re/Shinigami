@@ -18,7 +18,6 @@ NTSTATUS WINAPI Unhollow::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID*
         //
         // Search if we already have this entry
         //
-
         auto& Watcher = Unhollow::ProcessInformation.Watcher;
         auto it = std::find_if(Watcher.begin(), Watcher.end(), [BaseAddress](Memory* mem) { return mem->Addr == (uint8_t*) BaseAddress; });
         if (it == Watcher.end())

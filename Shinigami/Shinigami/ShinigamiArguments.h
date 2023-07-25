@@ -36,12 +36,12 @@ public:
     std::wstring TargetExecutableName;
     std::wstring WorkDirectory;
     std::wstring OutputDirectory;
+<<<<<<< HEAD
     std::wstring ExportedFunction;
     std::vector<std::wstring> TargetArguments;
 
-    // Ichigo arguments that will be sent to the injected code
 private:
-    IchigoArguments IchiArguments;
+=======
+    std::vector<std::wstring> TargetArguments;
 
-};
-
+    // Ichigo arguments that will be sent to the injected code

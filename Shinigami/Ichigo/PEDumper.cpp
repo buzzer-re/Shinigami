@@ -264,6 +264,7 @@ std::wstring AsciiToWide(const std::string& strAscii)
     return strWide;
 }
 
+#include "Logger.h"
 //
 // Fix in memory PE file to match the section information address in disk
 //
