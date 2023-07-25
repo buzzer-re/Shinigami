@@ -6,7 +6,7 @@
 #include "Unpacker.h"
 #include "Logger.h"
 
-#define DLL_NAME "Ichigo v0.1"
+#define DLL_NAME "Ichigo v1.2"
 #define MESSAGEBOX_ERROR_TITLE "Ichigo error"
 #define ERR_ICON MB_OK | MB_ICONERROR
 #define DLL_EXPORT __declspec(dllexport)
@@ -51,10 +51,9 @@ extern "C"
         Ichigo::Options.Quiet                = args->Quiet;
         Ichigo::Options.OnlyPE               = args->OnlyPE;
         Ichigo::Options.PID                  = args->PID;
-
+        
         PipeLogger::BeQuiet(args->Quiet);
         PipeLogger::LogInfo(L"Loaded user aguments");
-        
     }
 
     DLL_EXPORT void StartIchigo()

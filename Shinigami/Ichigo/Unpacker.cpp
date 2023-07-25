@@ -23,8 +23,8 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
     }
 
     NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
-    
-    if (status == STATUS_SUCCESS && Track)
+
+    if (status == STATUS_SUCCESS)
     {
         GenericUnpacker::cUnpacker.Watcher.push_back({});
         Memory& memory  = GenericUnpacker::cUnpacker.Watcher.back();
@@ -32,7 +32,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
         memory.End      = reinterpret_cast<ULONG_PTR>(memory.Addr + AllocatedSize);
         memory.Size     = AllocatedSize;
         memory.prot     = Protect;
-        PipeLogger::LogInfo(L"Tracking newly allocated memory 0x%lx with protections 0x%x", *BaseAddress, Protect);
+        PipeLogger::LogInfo(L"Tracking newly allocated memory 0x%p with protections 0x%x", *BaseAddress, Protect);
     }
 
     return status;
@@ -51,12 +51,12 @@ NTSTATUS WINAPI GenericUnpacker::hkNtWriteVirtualMemory(HANDLE ProcessHandle, PV
     VirtualQuery(BaseAddress, &mbi, NumberOfBytesToWrite);
     DWORD OldProtection = mbi.Protect;
 
-    if ((ProcessHandle == NULL || GetProcessId(ProcessHandle) == GenericUnpacker::IchigoOptions->PID) && (mbi.Protect & PAGE_GUARD) && GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR) BaseAddress))
+    if ((ProcessHandle == NULL || GetProcessId(ProcessHandle) == GenericUnpacker::IchigoOptions->PID) && (mbi.Protect & PAGE_GUARD) && GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)BaseAddress))
     {
         // Remove the PAGE_GUARD bit
-        IgnoreMap[(ULONG_PTR) BaseAddress] = TRUE;
+        IgnoreMap[(ULONG_PTR)BaseAddress] = TRUE;
         VirtualProtect(BaseAddress, NumberOfBytesToWrite, mbi.Protect & ~PAGE_GUARD, &OldProtection);
-        IgnoreMap[(ULONG_PTR) BaseAddress] = FALSE;
+        IgnoreMap[(ULONG_PTR)BaseAddress] = FALSE;
     }
 
     NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtWriteVirtualMemory(ProcessHandle, BaseAddress, Buffer, NumberOfBytesToWrite, NumberOfBytesWritten);
@@ -69,14 +69,14 @@ NTSTATUS WINAPI GenericUnpacker::hkNtProtectVirtualMemory(HANDLE ProcessHandle, 
 {
     // Verify that shit
     if (!GenericUnpacker::Ready)
-    ignore:
-        return GenericUnpacker::cUnpacker.Win32Pointers.NtProtectVirtualMemory(ProcessHandle, BaseAddress, RegionSize, NewProtect, OldProtect);
+        ignore:
+    return GenericUnpacker::cUnpacker.Win32Pointers.NtProtectVirtualMemory(ProcessHandle, BaseAddress, RegionSize, NewProtect, OldProtect);
 
     if (IgnoreMap.size() > 0)
     {
         auto IgnoreIter = IgnoreMap.find((ULONG_PTR)*BaseAddress);
         if (IgnoreIter != IgnoreMap.end() && IgnoreIter->second)
-            goto ignore;            
+            goto ignore;
     }
 
     // Detect if it will change to a executable memory
@@ -104,7 +104,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtProtectVirtualMemory(HANDLE ProcessHandle, 
             memory.End = reinterpret_cast<ULONG_PTR>(memory.Addr + *RegionSize);
             memory.Size = *RegionSize;
             memory.prot = NewProtect;
-            PipeLogger::LogInfo(L"VirtualProtect: Tracking memory at 0x%lx with protections 0x%x", *BaseAddress, NewProtect);
+            PipeLogger::LogInfo(L"NtProtectVirtualMemory: Tracking memory at 0x%p with protections 0x%x", *BaseAddress, NewProtect);
         }
     }
 
@@ -119,9 +119,10 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
         return EXCEPTION_CONTINUE_SEARCH;
 
     DWORD dwOldProt;
+    ULONG_PTR GuardedAddress;
+    static ULONG_PTR LastValidExceptionAddress;
     MEMORY_BASIC_INFORMATION mbi;
     PEXCEPTION_RECORD ExceptionRecord = pExceptionPointers->ExceptionRecord;
-    //PipeLogger::Log(L"Exception at 0x%x code %lx\n", ExceptionRecord->ExceptionAddress, ExceptionRecord->ExceptionCode);
 
     switch (ExceptionRecord->ExceptionCode)
     {
@@ -129,31 +130,38 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
         //
         // Verify if it's being monitored and executing
         //
-        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)ExceptionRecord->ExceptionAddress) &&
-            GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
+        GuardedAddress = ExceptionRecord->ExceptionInformation[1]; 
+        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
-            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%lx, starting dumping...", ExceptionRecord->ExceptionAddress);
+            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%p, starting dumping...", ExceptionRecord->ExceptionAddress);
             ULONG_PTR StartAddress = (ULONG_PTR)pExceptionPointers->ContextRecord->XIP;
             Memory* Mem = GenericUnpacker::cUnpacker.IsBeingMonitored(StartAddress);
+            Mem->IP = (ULONG_PTR) pExceptionPointers->ContextRecord->XIP;
 
             if (GenericUnpacker::cUnpacker.Dump(Mem))
             {
                 PipeLogger::Log(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
                 GenericUnpacker::cUnpacker.RemoveMonitor(Mem);
             }
-            // TODO: Check user arguments if we should continue here
+            
         }
-        pExceptionPointers->ContextRecord->EFlags |= 0x100;
+        // An exception happened, but we are not monitoring this code and this code is operating inside our monitored memory
+        // like an shellcode decryption process, we need to save this address to place the page_guard bit again
+        else if (GenericUnpacker::cUnpacker.IsBeingMonitored(GuardedAddress))
+        {
+            LastValidExceptionAddress = GuardedAddress;
+        }
+
+        pExceptionPointers->ContextRecord->EFlags |= TF;
         return EXCEPTION_CONTINUE_EXECUTION;
     
     case STATUS_SINGLE_STEP:
         // Add the PAGE_GUARD again
-        if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)ExceptionRecord->ExceptionAddress) &&
-            GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
+        if (GenericUnpacker::cUnpacker.IsBeingMonitored(LastValidExceptionAddress))
         {
-            VirtualQuery(ExceptionRecord->ExceptionAddress, &mbi, 0x1000);
+            VirtualQuery((LPCVOID) LastValidExceptionAddress, &mbi, PAGE_SIZE);
             mbi.Protect |= PAGE_GUARD;
-            VirtualProtect(ExceptionRecord->ExceptionAddress, 0x1000, mbi.Protect, &dwOldProt);
+            VirtualProtect((LPVOID) LastValidExceptionAddress, PAGE_SIZE, mbi.Protect, &dwOldProt);
         }
         return EXCEPTION_CONTINUE_EXECUTION;
     }
@@ -216,8 +224,9 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     if (Mem == nullptr) return FALSE;
     std::wstring suffix = L"_shellcode." + std::to_wstring(StagesPath.size() + 1) + L".bin";
     
-    PIMAGE_DOS_HEADER dosHeader= reinterpret_cast<PIMAGE_DOS_HEADER>(Mem->Addr);
+    PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Mem->Addr);
     PIMAGE_NT_HEADERS NTHeaders;
+
     if (dosHeader->e_magic == IMAGE_DOS_SIGNATURE)
     {
         // Check NT
@@ -225,36 +234,37 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
         if (NTHeaders->Signature == IMAGE_NT_SIGNATURE) 
         {
             PEDumper::FixPESections(Mem);
-            suffix = L"_stage_" + std::to_wstring(StagesPath.size() + 1) + std::wstring(L".exe");
+            suffix = L"_stage_" + std::to_wstring(StagesPath.size() + 1);
+            suffix += (NTHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) ? L".dll" : L".exe";
         }
     }
     else 
     {   
         // Search a PE file within the region
         PIMAGE_DOS_HEADER pDosHeader = PEDumper::FindPE(Mem);
-        
         if (pDosHeader != nullptr)
         {
             // Found it, save as part of this stage as well
             Memory PeMem;
             PIMAGE_NT_HEADERS pNtHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR)pDosHeader + pDosHeader->e_lfanew);
 
-            std::wstring EmbededPESuffix = L"_artefact_inside_stage_" + std::to_wstring(StagesPath.size() + 1) + L"_area.exe";
+            std::wstring EmbededPESuffix = L"_artefact_inside_stage_" + std::to_wstring(StagesPath.size() + 1) + L"_area";
+            EmbededPESuffix += (pNtHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) ? L".dll" : L".exe";
+
             std::wstring FileName = Utils::BuildFilenameFromProcessName(EmbededPESuffix.c_str());
             std::wstring SaveName = Utils::PathJoin(GenericUnpacker::IchigoOptions->WorkDirectory, FileName);
             
-  
+
             PeMem.Addr = reinterpret_cast<uint8_t*>(pDosHeader);
             PeMem.Size = PEDumper::GetPESize(pNtHeaders);
             PeMem.End  = reinterpret_cast<ULONG_PTR>(PeMem.Size + PeMem.Addr);
-            if (Utils::SaveToFile(SaveName.c_str(), &PeMem, FALSE))
+
+            if (Utils::SaveToFile(SaveName.c_str(), &PeMem, TRUE))
             {
                 PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
-                if (Ichigo::Options.OnlyPE)
-                {
-                    StagesPath.push_back(SaveName);
-                    return TRUE;
-                }
+
+                StagesPath.push_back(SaveName);
+                return TRUE;
             }
         }
     }

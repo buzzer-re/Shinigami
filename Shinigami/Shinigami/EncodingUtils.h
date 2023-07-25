@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <Windows.h>
 
 namespace EncodingUtils {
@@ -16,4 +17,6 @@ namespace EncodingUtils {
     // Convert wchar_t* to char*
     char* WcharToChar(const wchar_t* wstr);
 
+    // Split string
+    std::vector<std::wstring> SplitWide(std::wstring String, const std::wstring& delimiter);
 }

@@ -23,6 +23,7 @@ jobs:
       run: |
         git clone https://github.com/Microsoft/vcpkg.git
         cd vcpkg
+        git checkout a325228200d7f229f3337e612e0077f2a53
         .\bootstrap-vcpkg.bat
 
     # Install vcpkg dependencies

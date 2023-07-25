@@ -13,7 +13,7 @@ VOID __stdcall LoadDLL(ULONG_PTR Params)
         ThData->ExitProcess(ThData->GetLastError());
     }
     SetIchigoArguments SetArgsFunc = reinterpret_cast<SetIchigoArguments>(ThData->GetProcAddress(hModule, ThData->SetArgumentsFuncName));
-    StartIchigo StartIchigoFunc = reinterpret_cast<StartIchigo>(ThData->GetProcAddress(hModule, ThData->StartIchigoFuncName));
+    StartIchigo StartIchigoFunc    = reinterpret_cast<StartIchigo>(ThData->GetProcAddress(hModule, ThData->StartIchigoFuncName));
     if (!SetArgsFunc || !StartIchigoFunc)
     {
         ThData->ExitProcess(1);
@@ -23,16 +23,27 @@ VOID __stdcall LoadDLL(ULONG_PTR Params)
     StartIchigoFunc();
 }
 
+
+Injector::Injector(const std::wstring& ProcName)
+    : ProcName(ProcName)
+{}
+
 // Create a suspended process
 // Inject the DLL using APC callbacks
-BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const IchigoArguments& DLLArguments)
+BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const IchigoArguments& DLLArguments, BOOL IsDLL, const std::wstring& ExportedFunction)
 {
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
-    
+    DWORD ExitCode;
     ZeroMemory(&si, sizeof(si));
     ZeroMemory(&si, sizeof(pi));
     si.cb = sizeof(si);
+    
+    if (IsDLL)
+    {
+        ProcName = BuildRunDLLCommand(ProcName, ExportedFunction);
+        Logger::LogInfo(L"Target is a DLL, injecting into the rundll32 process!");
+    }
 
     // Create process suspended
     bool status = CreateProcess(
@@ -69,10 +80,9 @@ BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const Ichi
 
     ResumeThread(pi.hThread);
     WaitForSingleObject(pi.hThread, INFINITE);
-    DWORD ExitCode;
     GetExitCodeProcess(pi.hProcess, &ExitCode);
-    Logger::LogInfo(L"Child process exited with code %d, closing...", ExitCode);
 
+    Logger::LogInfo(L"Child process exited with code %d, closing...", ExitCode);
 quit:
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
@@ -138,3 +148,13 @@ BOOL Injector::APCLoadDLL(_In_ const PROCESS_INFORMATION& pi, _In_ const std::ws
 
     return TRUE;
 }
+
+std::wstring Injector::BuildRunDLLCommand(const std::wstring& DLLPath, const std::wstring& ExportedFunction)
+{
+    // Hack to fix std::wstring behaviour on concating wide strings, when calling c_str() it dont come complete
+    std::wstring RunDLL32 = L"rundll32.exe " + std::wstring(DLLPath.c_str()) + L" " + std::wstring(ExportedFunction.c_str());
+    return RunDLL32;
+}
+
+
+

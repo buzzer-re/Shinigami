@@ -8,7 +8,6 @@ NTSTATUS WINAPI Unhollow::hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID*
 {
     NTSTATUS status = ProcessInformation.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
     DWORD ProcessPID = GetProcessId(ProcessHandle);
-
     if (ProcessPID == Unhollow::ProcessInformation.pi.dwProcessId && NT_SUCCESS(status))
     {
         if (BaseAddress == nullptr)

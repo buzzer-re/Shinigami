@@ -23,7 +23,7 @@ struct IchigoArguments
 class ShinigamiArguments {
 public:
     ShinigamiArguments();
-    const std::wstring& GetTarget() const { return TargetExecutableName; }
+    const std::wstring& GetTarget() const;
     const std::wstring& GetWorkDirectory() const { return WorkDirectory; }
     const std::vector<std::wstring>& GetTargetArgs() const { return TargetArguments; }
     const IchigoArguments& GetIchigoArguments() const { return IchiArguments; }
@@ -31,16 +31,16 @@ public:
 
     void ParseArguments(int argc, char* argv[], const char* ProgramName);
 
-private:
+public:
     // Shinigami specific arguments for process creation and so on
     std::wstring TargetExecutableName;
     std::wstring WorkDirectory;
     std::wstring OutputDirectory;
+    std::wstring ExportedFunction;
     std::vector<std::wstring> TargetArguments;
 
     // Ichigo arguments that will be sent to the injected code
-
+private:
     IchigoArguments IchiArguments;
 
 };
-

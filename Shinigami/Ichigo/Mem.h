@@ -22,6 +22,7 @@ struct Memory
             && cAlloc == other.cAlloc;
     }
 
+    ULONG_PTR IP; // If this memory is being executed, this value holds the offset of the current execution, must be set manually
     uint8_t* Addr;
     ULONG_PTR End;
     SIZE_T Size;
