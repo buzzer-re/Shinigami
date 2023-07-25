@@ -54,16 +54,6 @@ std::wstring Utils::PathJoin(const std::wstring& BasePath, const std::wstring& F
 }
 
 
-// Quick and dirty implementation
-std::wstring Utils::PathJoin(const std::wstring& BasePath, const std::wstring& FileName)
-{
-    if (BasePath.back() == '\\')
-        return BasePath + FileName;
-
-    return BasePath + L'\\' + FileName;
-}
-
-
 
 std::wstring Utils::BuildFilenameFromProcessName(const wchar_t* suffix)
 {
