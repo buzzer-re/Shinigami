@@ -64,7 +64,13 @@ int main(int argc, char** argv)
 #ifdef _WIN64
     if (PE.Is32Bit())
     {
-        std::cerr << "Please use Shinigami 32-bit to execute this file\n";
+        std::cerr << "Please use Shinigami 32-bit to execute this file!\n";
+        return EXIT_FAILURE;
+    }
+#else
+    if (!PE.Is32Bit())
+    {
+        std::cerr << "Please use Shinigami 64-bit to execute this file!\n";
         return EXIT_FAILURE;
     }
 #endif

@@ -6,7 +6,7 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 {
     HANDLE hFile = CreateFileW(filename, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     BOOL success = TRUE;
-    
+
     if (hFile == INVALID_HANDLE_VALUE) {
         return false;
     }
@@ -15,29 +15,11 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
     DWORD OldProt;
 
     VirtualProtect(data->Addr, data->Size, PAGE_READWRITE, &OldProt);
-    
+
     success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
 
     VirtualProtect(data->Addr, data->Size, OldProt, &OldProt);
 
-    if (Paginate)
-    {
-        // Write based on the VirtualQuery output
-        MEMORY_BASIC_INFORMATION mbi;
-        DWORD Written = 0;
-        while (Written < data->Size)
-        {
-            VirtualQuery(data->Addr + Written, &mbi, sizeof(mbi));
-            WriteFile(hFile, data->Addr + Written, mbi.RegionSize, &BytesWritten, NULL);
-            Written += BytesWritten;
-        }
-    }
-    else
-    {
-        success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
-    }
-
-    
     CloseHandle(hFile);
 
     return TRUE;
@@ -66,7 +48,7 @@ std::wstring Utils::BuildFilenameFromProcessName(const wchar_t* suffix)
     // Get filename
     //
     wchar_t* exeName = PathFindFileNameW(exePath);
-    
+
     // 
     // Get the . pos
     //
@@ -92,6 +74,5 @@ MEM_ERROR Utils::IsReadWritable(ULONG_PTR* Address)
         return INVALID_MEMORY_AREA;
     }
 
-    return (MEM_ERROR) (mbi.Protect == PAGE_EXECUTE_READWRITE || mbi.Protect == PAGE_READWRITE);
+    return (MEM_ERROR)(mbi.Protect == PAGE_EXECUTE_READWRITE || mbi.Protect == PAGE_READWRITE);
 }
-
