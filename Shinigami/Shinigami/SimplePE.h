@@ -8,6 +8,7 @@ public:
 	SimplePE(const std::wstring& Path);
 	BOOL IsValid() const { return Valid;  }
 	BOOL IsDLL() const;
+	BOOL Is32Bit() const;
 private:
 	BOOL Load();
 private:

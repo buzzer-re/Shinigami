@@ -61,6 +61,14 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+#ifdef _WIN64
+    if (PE.Is32Bit())
+    {
+        std::cerr << "Please use Shinigami 32-bit to execute this file\n";
+        return EXIT_FAILURE;
+    }
+#endif
+
     Injector injector(Arguments.TargetExecutableName);
     
     if (!injector.InjectSuspended(DLL_NAME, Arguments.GetIchigoArguments(), PE.IsDLL(), Arguments.ExportedFunction))

@@ -53,8 +53,11 @@ void ShinigamiArguments::ParseArguments(int argc, char* argv[], const char* Prog
     if (parser.is_used("--exported"))
         ExportedFunction = EncodingUtils::StringToWstring(parser.get<std::string>("--exported"));
 
+    
     wcsncpy_s(IchiArguments.WorkDirectory, MAX_PATH, WorkDirectory.c_str(), _TRUNCATE);
+
     IchiArguments.Unhollow.StopAtWrite  = parser.get<bool>("--stop-at-write");
     IchiArguments.Quiet                 = !parser.get<bool>("--verbose");
     IchiArguments.OnlyPE                = parser.get<bool>("--only-executables");
+
 }

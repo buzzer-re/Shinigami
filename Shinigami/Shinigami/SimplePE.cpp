@@ -60,3 +60,8 @@ BOOL SimplePE::IsDLL() const
 {
 	return DLL;
 }
+
+BOOL SimplePE::Is32Bit() const
+{
+    return NtHeader.FileHeader.Machine == IMAGE_FILE_32BIT_MACHINE || NtHeader.FileHeader.Machine == IMAGE_FILE_MACHINE_I386;
+}

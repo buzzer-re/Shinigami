@@ -24,7 +24,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
 
     NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
 
-    if (status == STATUS_SUCCESS && Track)
+    if (status == STATUS_SUCCESS)
     {
         GenericUnpacker::cUnpacker.Watcher.push_back({});
         Memory& memory  = GenericUnpacker::cUnpacker.Watcher.back();
@@ -133,7 +133,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
         GuardedAddress = ExceptionRecord->ExceptionInformation[1]; 
         if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
-            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%lx, starting dumping...", ExceptionRecord->ExceptionAddress);
+            PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%p, starting dumping...", ExceptionRecord->ExceptionAddress);
             ULONG_PTR StartAddress = (ULONG_PTR)pExceptionPointers->ContextRecord->XIP;
             Memory* Mem = GenericUnpacker::cUnpacker.IsBeingMonitored(StartAddress);
             Mem->IP = (ULONG_PTR) pExceptionPointers->ContextRecord->XIP;
@@ -233,7 +233,8 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
         if (NTHeaders->Signature == IMAGE_NT_SIGNATURE) 
         {
             PEDumper::FixPESections(Mem);
-            suffix = L"_stage_" + std::to_wstring(StagesPath.size() + 1) + std::wstring(L".exe");
+            suffix = L"_stage_" + std::to_wstring(StagesPath.size() + 1);
+            suffix += (NTHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) ? L".dll" : L".exe";
         }
     }
     else 
@@ -247,7 +248,9 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
             Memory PeMem;
             PIMAGE_NT_HEADERS pNtHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR)pDosHeader + pDosHeader->e_lfanew);
 
-            std::wstring EmbededPESuffix = L"_artefact_inside_stage_" + std::to_wstring(StagesPath.size() + 1) + L"_area.exe";
+            std::wstring EmbededPESuffix = L"_artefact_inside_stage_" + std::to_wstring(StagesPath.size() + 1) + L"_area";
+            EmbededPESuffix += (pNtHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) ? L".dll" : L".exe";
+
             std::wstring FileName = Utils::BuildFilenameFromProcessName(EmbededPESuffix.c_str());
             std::wstring SaveName = Utils::PathJoin(GenericUnpacker::IchigoOptions->WorkDirectory, FileName);
             
@@ -259,11 +262,9 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
             if (Utils::SaveToFile(SaveName.c_str(), &PeMem, TRUE))
             {
                 PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
-                if (Ichigo::Options.OnlyPE)
-                {
-                    StagesPath.push_back(SaveName);
-                    return TRUE;
-                }
+
+                StagesPath.push_back(SaveName);
+                return TRUE;
             }
         }
     }

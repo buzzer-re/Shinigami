@@ -60,17 +60,11 @@ Memory* PEDumper::DumpPE(ULONG_PTR* Address)
     return mem;
 }
 
-static int count = 0;
 PIMAGE_DOS_HEADER PEDumper::FindPE(Memory* Mem)
 {
     PIMAGE_DOS_HEADER pDosHeader;
     PIMAGE_NT_HEADERS pNtHeader;
     MEMORY_BASIC_INFORMATION mbi;
-    if (!count)
-    {
-        count++;
-        return nullptr;
-    }
 
     for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End - sizeof(IMAGE_DOS_HEADER); Curr++)
     {
@@ -105,7 +99,7 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
     for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End - sizeof(IMAGE_NT_HEADERS); Curr++)
     {
         pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>(Curr);
-        if (pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+        if  (IsValidNT(pNtHeader))
         {
             // So far so good
             PipeLogger::LogInfo(L"Found possible NT header at 0x%p", Curr);
@@ -113,7 +107,7 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
             if (!VirtualQuery((LPCVOID)&pNtHeader->OptionalHeader, &mbi, sizeof(IMAGE_OPTIONAL_HEADER)))
                 continue;
 
-            if (true || (ULONG_PTR) Mem->Addr + pNtHeader->OptionalHeader.AddressOfEntryPoint == Mem->IP)
+            if ((ULONG_PTR) Mem->Addr + pNtHeader->OptionalHeader.AddressOfEntryPoint == Mem->IP)
             {
                 // We are at this executable entrypoint, rebuild the DOS header
                 if (Mem->Addr - Curr <= sizeof(IMAGE_DOS_HEADER))
@@ -136,6 +130,45 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
                 // If it is, log that, else log that it found valid sections mapped but the code might be hidden somehow
                 // Save the current NT address and proceed to the brute-force part of this code, if the brute-force fail
                 // use this saved NT address and tell the user
+                IMAGE_SECTION_HEADER* sectionHeader = IMAGE_FIRST_SECTION(pNtHeader);
+                bool Invalid = true;
+                bool IPInBetween = false;
+                ULONG_PTR VirtualMemAddr;
+                for (int i = 0; i < pNtHeader->FileHeader.NumberOfSections; i++, sectionHeader++) {
+                    // Invalid memory area
+                    if (Utils::IsReadWritable((ULONG_PTR*)sectionHeader) == INVALID_MEMORY_AREA) {
+                        Invalid = true;
+                        break;
+                    }
+
+                    VirtualMemAddr = sectionHeader->VirtualAddress + (ULONG_PTR)Mem->Addr;
+                    // Check if there is any overflow here
+                    if (sectionHeader->PointerToRawData + sectionHeader->SizeOfRawData + (ULONG_PTR) Mem->Addr >= Mem->End || 
+                        sectionHeader->VirtualAddress + sectionHeader->Misc.VirtualSize + (ULONG_PTR) Mem->Addr >= Mem->End)
+                    {
+                        Invalid = true;
+                        break;
+                    }          
+
+                    // Check if the Instruction pointer is between this image
+                    if (Mem->IP >= VirtualMemAddr && Mem->IP <= VirtualMemAddr + sectionHeader->Misc.VirtualSize)
+                        IPInBetween = true;
+                   
+                }
+
+                if (Invalid)
+                    continue;
+                
+                if (!Invalid && IPInBetween)
+                {
+                    PipeLogger::LogInfo(L"Possible NT found at 0x%p! Trying to rebuild...", pNtHeader);
+                    PIMAGE_DOS_HEADER DosHdr = RebuildDOSHeader(Mem, (ULONG_PTR)Curr);
+                    if (DosHdr != nullptr)
+                    {
+                        PipeLogger::LogInfo(L"DOS header rebuilded!");
+                        return DosHdr;
+                    }
+                }
             }
         }
     }
@@ -151,6 +184,29 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
 
     return nullptr;
 }
+
+
+// Verify NT headers fields to validate if is valid
+BOOL PEDumper::IsValidNT(PIMAGE_NT_HEADERS pNtHeader)
+{
+    return pNtHeader->Signature == IMAGE_NT_SIGNATURE &&
+            (
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_UNKNOWN ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_OS2_CUI ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_POSIX_CUI ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_CE_GUI ||
+                pNtHeader->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_UNKNOWN
+            )
+        &&
+        (
+            pNtHeader->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
+            pNtHeader->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC
+        );
+}
+
 
 PIMAGE_DOS_HEADER PEDumper::RebuildDOSHeader(Memory* Mem, ULONG_PTR NtHeaderOffset)
 {
