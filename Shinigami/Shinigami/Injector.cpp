@@ -73,7 +73,7 @@ BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const Ichi
     Logger::LogInfo(L"Injection finished, waiting connection...");
     if (!PipeLogger::InitPipe())
     {
-        Logger::LogInfo(L"Unable to initialize log pipes! Error: %d\n", GetLastError());
+        Logger::LogInfo(L"Unable to initialize log pipes! Error: %llx\n", GetLastError());
         TerminateProcess(pi.hProcess, 0);
         goto quit;
     }
@@ -82,7 +82,7 @@ BOOL Injector::InjectSuspended(_In_ const std::wstring& DLLPath, _In_ const Ichi
     WaitForSingleObject(pi.hThread, INFINITE);
     GetExitCodeProcess(pi.hProcess, &ExitCode);
 
-    Logger::LogInfo(L"Child process exited with code %d, closing...", ExitCode);
+    Logger::LogInfo(L"Child process exited with code %llx, closing...", ExitCode);
 quit:
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
