@@ -24,7 +24,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
 
     NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
 
-    if (status == STATUS_SUCCESS)
+    if (Track && status == STATUS_SUCCESS)
     {
         GenericUnpacker::cUnpacker.Watcher.push_back({});
         Memory& memory  = GenericUnpacker::cUnpacker.Watcher.back();
@@ -32,6 +32,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
         memory.End      = reinterpret_cast<ULONG_PTR>(memory.Addr + AllocatedSize);
         memory.Size     = AllocatedSize;
         memory.prot     = Protect;
+        memory.Visited = false;
         PipeLogger::LogInfo(L"Tracking newly allocated memory 0x%p with protections 0x%x", *BaseAddress, Protect);
     }
 
@@ -131,6 +132,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
         // Verify if it's being monitored and executing
         //
         GuardedAddress = ExceptionRecord->ExceptionInformation[1]; 
+
         if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
             PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%p, starting dumping...", ExceptionRecord->ExceptionAddress);
@@ -141,9 +143,10 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
             if (GenericUnpacker::cUnpacker.Dump(Mem))
             {
                 PipeLogger::Log(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
-                GenericUnpacker::cUnpacker.RemoveMonitor(Mem);
+                GenericUnpacker::cUnpacker.RemoveMonitor(Mem);   
             }
-            
+
+            LastValidExceptionAddress = NULL;
         }
         // An exception happened, but we are not monitoring this code and this code is operating inside our monitored memory
         // like an shellcode decryption process, we need to save this address to place the page_guard bit again
@@ -157,7 +160,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
     
     case STATUS_SINGLE_STEP:
         // Add the PAGE_GUARD again
-        if (GenericUnpacker::cUnpacker.IsBeingMonitored(LastValidExceptionAddress))
+        if (LastValidExceptionAddress && GenericUnpacker::cUnpacker.IsBeingMonitored(LastValidExceptionAddress))
         {
             VirtualQuery((LPCVOID) LastValidExceptionAddress, &mbi, PAGE_SIZE);
             mbi.Protect |= PAGE_GUARD;
@@ -191,6 +194,7 @@ BOOL GenericUnpacker::InitUnpackerHooks(HookManager& hkManager, Ichigo::Argument
     if (NTDLL == NULL)
         return FALSE;
 
+
 	BYTE* NtAllocateVirtualMemoryPointer = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtAllocateVirtualMemory"));
     BYTE* NtWriteVirtualMemoryPointer    = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
     BYTE* NtProtectVirtualMemoryPointer  = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtProtectVirtualMemory"));
@@ -215,6 +219,7 @@ BOOL GenericUnpacker::InitUnpackerHooks(HookManager& hkManager, Ichigo::Argument
     return TRUE;
 }
 
+
 //
 // Save the raw dump of the suspicious code
 // Also scan searching for MZ/PE headers
@@ -226,6 +231,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     
     PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Mem->Addr);
     PIMAGE_NT_HEADERS NTHeaders;
+    Mem->Visited = true; // Mark this memory region as visited
 
     if (dosHeader->e_magic == IMAGE_DOS_SIGNATURE)
     {
@@ -261,8 +267,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
 
             if (Utils::SaveToFile(SaveName.c_str(), &PeMem, TRUE))
             {
-                PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
-
+                PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory area, saved as %s!", SaveName.c_str());
                 StagesPath.push_back(SaveName);
                 return TRUE;
             }
@@ -283,6 +288,22 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     return FALSE;
 }
 
+// Perform one last memory scan in all unvisited memory areas
+VOID GenericUnpacker::FinalScan()
+{
+    PipeLogger::LogInfo(L"Performing one last scan in unvisited memory regions...");
+    Ichigo::Options.OnlyPE = true;
+
+    for (auto& Mem : cUnpacker.Watcher)
+    {
+        if (!Mem.Visited)
+        {
+            PipeLogger::LogInfo(L"Visiting %p-%p...", Mem.Addr, Mem.End);
+            cUnpacker.Dump(&Mem);
+        }
+    }
+
+}
 
 //
 // Verify if the exception happened in one of our monitered addresses

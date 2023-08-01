@@ -31,6 +31,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
+        GenericUnpacker::FinalScan();
         GenericUnpacker::Shutdown();
         Unhollow::Shutdown();
         PipeLogger::LogInfo(L"Exiting...");

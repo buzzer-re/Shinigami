@@ -13,12 +13,28 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 
     DWORD BytesWritten;
     DWORD OldProt;
+    
+    // Paginate write
+    SIZE_T BytesToRead = PAGE_SIZE;
+    SIZE_T Remaining = data->Size;
+    SIZE_T Diff;
+    
+    while (Remaining)
+    {
+        if (Remaining < PAGE_SIZE)
+        {
+            BytesToRead = Remaining;
+        }
 
-    VirtualProtect(data->Addr, data->Size, PAGE_READWRITE, &OldProt);
+        if (!(success = VirtualProtect(data->Addr, BytesToRead, PAGE_READONLY, &OldProt))) break;
 
-    success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size);
+        if (!(success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size))) break;
+       
+        if (!(success = VirtualProtect(data->Addr, BytesToRead, OldProt, &OldProt))) break;
 
-    VirtualProtect(data->Addr, data->Size, OldProt, &OldProt);
+        Remaining -= BytesToRead;
+
+    }
 
     CloseHandle(hFile);
 

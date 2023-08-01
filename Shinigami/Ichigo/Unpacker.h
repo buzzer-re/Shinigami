@@ -62,6 +62,8 @@ namespace GenericUnpacker
     LONG WINAPI VEHandler(EXCEPTION_POINTERS* pExceptionPointers);
 
     BOOL InitUnpackerHooks(HookManager& hkManager, Ichigo::Arguments& Arguments);
+    // Perform an scan in all unvisited memory regions
+    VOID FinalScan();
 
     VOID RemoveGuard(ULONG_PTR Address);
     VOID Shutdown();

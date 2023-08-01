@@ -69,8 +69,11 @@ namespace Unhollow
 
     // Place our hooks
     BOOL InitUnhollowHooks(HookManager& hkManager, Ichigo::Arguments& Options);
+    
+
     // Clean
     VOID Shutdown();
+
 
     // Hold the current config state
     static Ichigo::Arguments* IchigoOptions;
