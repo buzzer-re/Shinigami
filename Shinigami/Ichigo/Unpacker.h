@@ -47,6 +47,7 @@ namespace GenericUnpacker
     static class Unpacker
     {
     public:
+        Unpacker() : ExecutionAborted(false) {}
         Memory* IsBeingMonitored(ULONG_PTR Address);
         BOOL Dump(Memory* StartAddress);
         VOID RemoveMonitor(Memory* Mem);
@@ -56,12 +57,16 @@ namespace GenericUnpacker
         WinAPIPointers Win32Pointers;
         std::list<Memory> Watcher;
         std::vector<std::wstring> StagesPath;
+        bool ExecutionAborted;
     } cUnpacker;
 
 
     LONG WINAPI VEHandler(EXCEPTION_POINTERS* pExceptionPointers);
+    LONG WINAPI VEHLastHandler(EXCEPTION_POINTERS* pExceptionPointers);
 
     BOOL InitUnpackerHooks(HookManager& hkManager, Ichigo::Arguments& Arguments);
+    // Perform an scan in all unvisited memory regions
+    VOID FinalScan();
 
     VOID RemoveGuard(ULONG_PTR Address);
     VOID Shutdown();

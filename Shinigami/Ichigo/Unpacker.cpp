@@ -32,6 +32,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
         memory.End      = reinterpret_cast<ULONG_PTR>(memory.Addr + AllocatedSize);
         memory.Size     = AllocatedSize;
         memory.prot     = Protect;
+        memory.Visited = false;
         PipeLogger::LogInfo(L"Tracking newly allocated memory 0x%p with protections 0x%x", *BaseAddress, Protect);
     }
 
@@ -131,6 +132,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
         // Verify if it's being monitored and executing
         //
         GuardedAddress = ExceptionRecord->ExceptionInformation[1]; 
+
         if (GenericUnpacker::cUnpacker.IsBeingMonitored((ULONG_PTR)pExceptionPointers->ContextRecord->XIP))
         {
             PipeLogger::LogInfo(L"STATUS_GUARD_PAGE_VIOLATION: Attempt to execute a monitored memory area at address 0x%p, starting dumping...", ExceptionRecord->ExceptionAddress);
@@ -141,9 +143,10 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
             if (GenericUnpacker::cUnpacker.Dump(Mem))
             {
                 PipeLogger::Log(L"Saved stage %d as %s ", GenericUnpacker::cUnpacker.StagesPath.size(), GenericUnpacker::cUnpacker.StagesPath.back().c_str());
-                GenericUnpacker::cUnpacker.RemoveMonitor(Mem);
+                GenericUnpacker::cUnpacker.RemoveMonitor(Mem);   
             }
-            
+
+            LastValidExceptionAddress = NULL;
         }
         // An exception happened, but we are not monitoring this code and this code is operating inside our monitored memory
         // like an shellcode decryption process, we need to save this address to place the page_guard bit again
@@ -157,7 +160,7 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
     
     case STATUS_SINGLE_STEP:
         // Add the PAGE_GUARD again
-        if (GenericUnpacker::cUnpacker.IsBeingMonitored(LastValidExceptionAddress))
+        if (LastValidExceptionAddress && GenericUnpacker::cUnpacker.IsBeingMonitored(LastValidExceptionAddress))
         {
             VirtualQuery((LPCVOID) LastValidExceptionAddress, &mbi, PAGE_SIZE);
             mbi.Protect |= PAGE_GUARD;
@@ -168,6 +171,23 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
 
     return EXCEPTION_CONTINUE_SEARCH;
 }
+
+LONG WINAPI GenericUnpacker::VEHLastHandler(EXCEPTION_POINTERS* pExceptionPointers)
+{
+    if (!GenericUnpacker::cUnpacker.ExecutionAborted)
+    {
+        // Force exit to detach our DLL safely, this will trigger the last scan
+        PEXCEPTION_RECORD ExceptionRecord = pExceptionPointers->ExceptionRecord;
+        PipeLogger::LogInfo(L"ERROR: An exception with code (0x%lx) was raised! Performing one last scan and aborting execution...", ExceptionRecord->ExceptionCode);
+
+        GenericUnpacker::FinalScan();
+        GenericUnpacker::cUnpacker.ExecutionAborted = true;
+    }
+
+
+    return EXCEPTION_CONTINUE_SEARCH;
+ }
+
 
 VOID GenericUnpacker::RemoveGuard(ULONG_PTR Address)
 {
@@ -191,6 +211,7 @@ BOOL GenericUnpacker::InitUnpackerHooks(HookManager& hkManager, Ichigo::Argument
     if (NTDLL == NULL)
         return FALSE;
 
+
 	BYTE* NtAllocateVirtualMemoryPointer = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtAllocateVirtualMemory"));
     BYTE* NtWriteVirtualMemoryPointer    = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtWriteVirtualMemory"));
     BYTE* NtProtectVirtualMemoryPointer  = reinterpret_cast<BYTE*>(GetProcAddress(NTDLL, "NtProtectVirtualMemory"));
@@ -207,13 +228,18 @@ BOOL GenericUnpacker::InitUnpackerHooks(HookManager& hkManager, Ichigo::Argument
     // Register the VEH handler
     //
     AddVectoredExceptionHandler(true, (PVECTORED_EXCEPTION_HANDLER)GenericUnpacker::VEHandler);
+    //
+    // Handler to detect when process suddenly exits and invoke our memory scan 
+    //
+    AddVectoredExceptionHandler(false, (PVECTORED_EXCEPTION_HANDLER)GenericUnpacker::VEHLastHandler);
 
-    PipeLogger::LogInfo(L"Unpacker: -- Hooked functions and added the VEH callback --");
+    PipeLogger::LogInfo(L"Unpacker: -- Hooked functions and added the exception handlers callbacks --");
     GenericUnpacker::Ready          = TRUE;
     GenericUnpacker::IchigoOptions  = &Arguments;
 
     return TRUE;
 }
+
 
 //
 // Save the raw dump of the suspicious code
@@ -226,20 +252,24 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     
     PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(Mem->Addr);
     PIMAGE_NT_HEADERS NTHeaders;
+    Mem->Visited = true; // Mark this memory region as visited
 
     if (dosHeader->e_magic == IMAGE_DOS_SIGNATURE)
     {
+
         // Check NT
         NTHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR) dosHeader + dosHeader->e_lfanew);
-        if (NTHeaders->Signature == IMAGE_NT_SIGNATURE) 
+
+        if (PEDumper::IsValidNT(NTHeaders))
         {
             PEDumper::FixPESections(Mem);
             suffix = L"_stage_" + std::to_wstring(StagesPath.size() + 1);
             suffix += (NTHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) ? L".dll" : L".exe";
+            goto save;
         }
     }
     else 
-    {   
+    {
         // Search a PE file within the region
         PIMAGE_DOS_HEADER pDosHeader = PEDumper::FindPE(Mem);
         if (pDosHeader != nullptr)
@@ -261,8 +291,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
 
             if (Utils::SaveToFile(SaveName.c_str(), &PeMem, TRUE))
             {
-                PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory are, saved as %s!", SaveName.c_str());
-
+                PipeLogger::Log(L"Found a embedded PE file inside the newly executed memory area, saved as %s!", SaveName.c_str());
                 StagesPath.push_back(SaveName);
                 return TRUE;
             }
@@ -271,6 +300,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     
     if (Ichigo::Options.OnlyPE) return FALSE;
 
+save:
     std::wstring FileName = Utils::BuildFilenameFromProcessName(suffix.c_str());
     std::wstring SaveName = Utils::PathJoin(GenericUnpacker::IchigoOptions->WorkDirectory, FileName);
 
@@ -283,6 +313,28 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     return FALSE;
 }
 
+//
+// Perform one last memory scan in all unvisited memory areas, this can be called before the process crashes or exit normally
+//
+VOID GenericUnpacker::FinalScan()
+{
+    if (GenericUnpacker::cUnpacker.ExecutionAborted) return;
+    PipeLogger::Log(L"Performing one last scan in unvisited memory regions...");
+    Ichigo::Options.OnlyPE = true;
+
+    for (auto& Mem : cUnpacker.Watcher)
+    {
+        if (!Mem.Visited)
+        {
+            PipeLogger::LogInfo(L"Visiting %p-%p...", Mem.Addr, Mem.End);
+            if (cUnpacker.Dump(&Mem))
+            {
+                PipeLogger::Log(L"Saved missed implant as %s!", cUnpacker.StagesPath.back().c_str());
+            }
+        }
+    }
+
+}
 
 //
 // Verify if the exception happened in one of our monitered addresses

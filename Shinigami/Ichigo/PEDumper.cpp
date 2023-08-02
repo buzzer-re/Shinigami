@@ -79,8 +79,12 @@ PIMAGE_DOS_HEADER PEDumper::FindPE(Memory* Mem)
                 if (!VirtualQuery((LPCVOID)pNtHeader, &mbi, 0x1000))
                     continue;
                 
-                if (pNtHeader->Signature == IMAGE_NT_SIGNATURE)
+                if (IsValidNT(pNtHeader))
+                {
+
                     return pDosHeader;
+                }
+                    
             }
         }
     }
@@ -95,6 +99,7 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
     // If found, validated sections offset and if it has code
     PIMAGE_NT_HEADERS pNtHeader;
     MEMORY_BASIC_INFORMATION mbi;
+    uint8_t* PossibleBegin = nullptr;
 
     for (uint8_t* Curr = reinterpret_cast<uint8_t*>(Mem->Addr); (ULONG_PTR)Curr < Mem->End - sizeof(IMAGE_NT_HEADERS); Curr++)
     {
@@ -131,7 +136,7 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
                 // Save the current NT address and proceed to the brute-force part of this code, if the brute-force fail
                 // use this saved NT address and tell the user
                 IMAGE_SECTION_HEADER* sectionHeader = IMAGE_FIRST_SECTION(pNtHeader);
-                bool Invalid = true;
+                bool Invalid = false;
                 bool IPInBetween = false;
                 ULONG_PTR VirtualMemAddr;
                 for (int i = 0; i < pNtHeader->FileHeader.NumberOfSections; i++, sectionHeader++) {
@@ -140,7 +145,7 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
                         Invalid = true;
                         break;
                     }
-
+ 
                     VirtualMemAddr = sectionHeader->VirtualAddress + (ULONG_PTR)Mem->Addr;
                     // Check if there is any overflow here
                     if (sectionHeader->PointerToRawData + sectionHeader->SizeOfRawData + (ULONG_PTR) Mem->Addr >= Mem->End || 
@@ -159,8 +164,9 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
                 if (Invalid)
                     continue;
                 
-                if (!Invalid && IPInBetween)
+                if (!Invalid)
                 {
+                    PossibleBegin = Curr;
                     PipeLogger::LogInfo(L"Possible NT found at 0x%p! Trying to rebuild...", pNtHeader);
                     PIMAGE_DOS_HEADER DosHdr = RebuildDOSHeader(Mem, (ULONG_PTR)Curr);
                     if (DosHdr != nullptr)
@@ -173,6 +179,16 @@ PIMAGE_DOS_HEADER PEDumper::HeuristicSearch(Memory* Mem)
         }
     }
 
+    if (PossibleBegin != nullptr)
+    {
+        PipeLogger::LogInfo(L"Found a possible injected PE file, trying to rebuild it...");
+        PIMAGE_DOS_HEADER DosHdr = RebuildDOSHeader(Mem, (ULONG_PTR)PossibleBegin);
+        if (DosHdr != nullptr)
+        {
+            PipeLogger::LogInfo(L"DOS header rebuilded! Please notice that this image could be damaged!");
+            return DosHdr;
+        }
+    } else PipeLogger::LogInfo(L"Failed to find an malicious implant");
 
     // We failed to search detached DOS headers
     // Search for common sections names such: .text, .data, .rdata

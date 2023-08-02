@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 
+#define PAGE_SIZE 0x1000
 // Unpack structures
 struct Memory
 {
@@ -30,4 +31,5 @@ struct Memory
     bool safe;
     DWORD ProcessID;
     bool cAlloc;
+    bool Visited;
 };
