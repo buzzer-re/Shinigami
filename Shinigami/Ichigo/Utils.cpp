@@ -28,7 +28,7 @@ BOOL Utils::SaveToFile(const wchar_t* filename, Memory* data, BOOL Paginate)
 
         if (!(success = VirtualProtect(data->Addr, BytesToRead, PAGE_READONLY, &OldProt))) break;
 
-        if (!(success = WriteFile(hFile, data->Addr, data->Size, &BytesWritten, NULL) && (BytesWritten == data->Size))) break;
+        if (!(success = WriteFile(hFile, data->Addr, BytesToRead, &BytesWritten, NULL) && (BytesWritten == BytesToRead))) break;
        
         if (!(success = VirtualProtect(data->Addr, BytesToRead, OldProt, &OldProt))) break;
 

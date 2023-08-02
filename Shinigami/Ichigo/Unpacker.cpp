@@ -24,7 +24,7 @@ NTSTATUS WINAPI GenericUnpacker::hkNtAllocateVirtualMemory(HANDLE ProcessHandle,
 
     NTSTATUS status = GenericUnpacker::cUnpacker.Win32Pointers.NtAllocateVirtualMemory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect);
 
-    if (Track && status == STATUS_SUCCESS)
+    if (status == STATUS_SUCCESS)
     {
         GenericUnpacker::cUnpacker.Watcher.push_back({});
         Memory& memory  = GenericUnpacker::cUnpacker.Watcher.back();
@@ -172,6 +172,23 @@ LONG WINAPI GenericUnpacker::VEHandler(EXCEPTION_POINTERS* pExceptionPointers)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+LONG WINAPI GenericUnpacker::VEHLastHandler(EXCEPTION_POINTERS* pExceptionPointers)
+{
+    if (!GenericUnpacker::cUnpacker.ExecutionAborted)
+    {
+        // Force exit to detach our DLL safely, this will trigger the last scan
+        PEXCEPTION_RECORD ExceptionRecord = pExceptionPointers->ExceptionRecord;
+        PipeLogger::LogInfo(L"ERROR: An exception with code (0x%lx) was raised! Performing one last scan and aborting execution...", ExceptionRecord->ExceptionCode);
+
+        GenericUnpacker::FinalScan();
+        GenericUnpacker::cUnpacker.ExecutionAborted = true;
+    }
+
+
+    return EXCEPTION_CONTINUE_SEARCH;
+ }
+
+
 VOID GenericUnpacker::RemoveGuard(ULONG_PTR Address)
 {
     DWORD dwOldProt;
@@ -211,8 +228,12 @@ BOOL GenericUnpacker::InitUnpackerHooks(HookManager& hkManager, Ichigo::Argument
     // Register the VEH handler
     //
     AddVectoredExceptionHandler(true, (PVECTORED_EXCEPTION_HANDLER)GenericUnpacker::VEHandler);
+    //
+    // Handler to detect when process suddenly exits and invoke our memory scan 
+    //
+    AddVectoredExceptionHandler(false, (PVECTORED_EXCEPTION_HANDLER)GenericUnpacker::VEHLastHandler);
 
-    PipeLogger::LogInfo(L"Unpacker: -- Hooked functions and added the VEH callback --");
+    PipeLogger::LogInfo(L"Unpacker: -- Hooked functions and added the exception handlers callbacks --");
     GenericUnpacker::Ready          = TRUE;
     GenericUnpacker::IchigoOptions  = &Arguments;
 
@@ -235,17 +256,20 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
 
     if (dosHeader->e_magic == IMAGE_DOS_SIGNATURE)
     {
+
         // Check NT
         NTHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>((ULONG_PTR) dosHeader + dosHeader->e_lfanew);
-        if (NTHeaders->Signature == IMAGE_NT_SIGNATURE) 
+
+        if (PEDumper::IsValidNT(NTHeaders))
         {
             PEDumper::FixPESections(Mem);
             suffix = L"_stage_" + std::to_wstring(StagesPath.size() + 1);
             suffix += (NTHeaders->FileHeader.Characteristics & IMAGE_FILE_DLL) ? L".dll" : L".exe";
+            goto save;
         }
     }
     else 
-    {   
+    {
         // Search a PE file within the region
         PIMAGE_DOS_HEADER pDosHeader = PEDumper::FindPE(Mem);
         if (pDosHeader != nullptr)
@@ -276,6 +300,7 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     
     if (Ichigo::Options.OnlyPE) return FALSE;
 
+save:
     std::wstring FileName = Utils::BuildFilenameFromProcessName(suffix.c_str());
     std::wstring SaveName = Utils::PathJoin(GenericUnpacker::IchigoOptions->WorkDirectory, FileName);
 
@@ -288,10 +313,13 @@ BOOL GenericUnpacker::Unpacker::Dump(Memory* Mem)
     return FALSE;
 }
 
-// Perform one last memory scan in all unvisited memory areas
+//
+// Perform one last memory scan in all unvisited memory areas, this can be called before the process crashes or exit normally
+//
 VOID GenericUnpacker::FinalScan()
 {
-    PipeLogger::LogInfo(L"Performing one last scan in unvisited memory regions...");
+    if (GenericUnpacker::cUnpacker.ExecutionAborted) return;
+    PipeLogger::Log(L"Performing one last scan in unvisited memory regions...");
     Ichigo::Options.OnlyPE = true;
 
     for (auto& Mem : cUnpacker.Watcher)
@@ -299,7 +327,10 @@ VOID GenericUnpacker::FinalScan()
         if (!Mem.Visited)
         {
             PipeLogger::LogInfo(L"Visiting %p-%p...", Mem.Addr, Mem.End);
-            cUnpacker.Dump(&Mem);
+            if (cUnpacker.Dump(&Mem))
+            {
+                PipeLogger::Log(L"Saved missed implant as %s!", cUnpacker.StagesPath.back().c_str());
+            }
         }
     }
 

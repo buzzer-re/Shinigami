@@ -178,10 +178,15 @@ typedef NTSTATUS (WINAPI NtProtectVirtualMemory) (
 );
 
 
+typedef LONG (WINAPI mPTOP_LEVEL_EXCEPTION_FILTER)(
+    EXCEPTION_POINTERS* ExceptionInfo
+);
+
 struct WinAPIPointers {
     NtAllocateVirtualMemory* NtAllocateVirtualMemory;
     NtWriteVirtualMemory* NtWriteVirtualMemory;
     NtCreateUserProcess* NtCreateUserProcess;
     NtResumeThread* NtResumeThread;
     NtProtectVirtualMemory* NtProtectVirtualMemory;
+    mPTOP_LEVEL_EXCEPTION_FILTER* PTOP_LEVEL_EXCEPTION_FILTER;
 };
