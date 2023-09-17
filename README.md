@@ -43,7 +43,7 @@ The tool has a couple of options:
 
 
 ```bash
-Usage: Shinigami [--help] [--version] [--output VAR] [--stop-at-write] [--verbose] [--only-executables] program_name
+Usage: Shinigami [--help] [--version] [--output VAR] [--stop-at-write] [--verbose] [--only-executables] [--exported VAR] program_name
 
 Positional arguments:
   program_name                  Name of the program to execute
@@ -55,7 +55,7 @@ Optional arguments:
   --stop-at-write               Unhollow: Stop the execution when the PE file is being to be written
   --verbose                     Display a verbose output
   -p, --only-executables        Only extract PE artefacts
-
+  -e, --exported                Exported Function: Choose a exported function to execute if the target is a DLL (rundll will be used)
 ```
 
 Some important options are:
@@ -66,9 +66,6 @@ Some important options are:
 
 ***--verbose***: Displays a verbose output. This can be useful for debugging or understanding the inner workings of Shinigami.
 
-## DLL Support
-
-Currently, Shinigami does not load DLL executables within its context. However, this feature is under development. In the meantime, you can utilize this handy [tool](https://github.com/buzzer-re/dll2exe) that I have built to convert DLL to EXE files, allowing you to select the desired exported function as entrypoint (if needed). In a future release, this tool's functionality will be available natively within Shinigami.
 
 ### Example usage:
 ## Unhollow
@@ -93,6 +90,15 @@ The detected implant will be dumped following the format described at [detection
 |Unpacking a random loader described [here](https://reversing.codes/posts/Manual-unpacking-in-details/)|
 
 In the example above, Shinigami automatically detected the behavior of a generic loader and extracted all the executed shellcodes and images within it, without requiring any specific switches to enable or disable the unpacking routine. This was possible because Shinigami shares some functions with the unhollow module, using shared hooks provided by the [Gancho](https://github.com/buzzer-re/gancho) library.
+
+
+## Emotet
+
+|![](assets/screenshots/emotet.png)|
+|:--:|
+|Unpacking Emotet DLL|
+
+Shinigami also has DLL support and the ability to rebuild injected binaries using detached DOS headers. Notably, malware samples like Emotet use this technique to evade in-memory PE scanners. Shinigami detects such missing parts (DOS header) and employs heuristics to reconstruct them.
 
 ## Installing
 
